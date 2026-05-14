@@ -675,14 +675,17 @@ class _ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
       backgroundColor: readingMode.controlSurface,
       foregroundColor: readingMode.primaryText,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
+        icon: Icon(Icons.arrow_back, color: readingMode.primaryText),
         onPressed: onBack,
         tooltip: 'Back',
       ),
       title: Text(title, overflow: TextOverflow.ellipsis, style: titleStyle),
       actions: [
         IconButton(
-          icon: Icon(isBookmarked ? Icons.bookmark : Icons.bookmark_outline),
+          icon: Icon(
+            isBookmarked ? Icons.bookmark : Icons.bookmark_outline,
+            color: readingMode.primaryText,
+          ),
           onPressed: onBookmark,
           tooltip: isBookmarked ? 'Remove bookmark' : 'Bookmark page',
         ),
