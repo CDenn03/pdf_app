@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 
 import 'package:pdf_app/core/database/database_helper.dart';
 import 'package:pdf_app/core/models/annotation.dart';
+import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
 import 'package:pdf_app/core/models/relative_rect_model.dart';
 
@@ -33,6 +34,20 @@ class AnnotationDao {
       'annotations',
       where: 'pdf_id = ? AND page >= ? AND page <= ? AND is_deleted = 0',
       whereArgs: [pdfId, startPage, endPage],
+    );
+    return maps.map(_fromMap).toList();
+  }
+
+  /// Retrieves ALL non-deleted annotations for [pdfId], ordered by page.
+  ///
+  /// Used by the annotation panel to show a full document overview.
+  Future<List<Annotation>> getAllForPdf(String pdfId) async {
+    final db = await _db;
+    final maps = await db.query(
+      'annotations',
+      where: 'pdf_id = ? AND is_deleted = 0',
+      whereArgs: [pdfId],
+      orderBy: 'page ASC',
     );
     return maps.map(_fromMap).toList();
   }
@@ -77,6 +92,7 @@ class AnnotationDao {
       'rect_bottom': annotation.rect?.bottom,
       'rect_right': annotation.rect?.right,
       'text': annotation.text,
+      'color': annotation.color.name,
       'is_deleted': annotation.isDeleted ? 1 : 0,
       'updated_at': _now,
     };
@@ -96,6 +112,12 @@ class AnnotationDao {
       );
     }
 
+    final colorName = map['color'] as String? ?? 'yellow';
+    final color = AnnotationColor.values.firstWhere(
+      (c) => c.name == colorName,
+      orElse: () => AnnotationColor.yellow,
+    );
+
     return Annotation(
       id: map['id'] as String,
       pdfId: map['pdf_id'] as String,
@@ -103,6 +125,7 @@ class AnnotationDao {
       type: AnnotationType.values.byName(map['type'] as String),
       rect: rect,
       text: map['text'] as String?,
+      color: color,
       isDeleted: (map['is_deleted'] as int) == 1,
     );
   }

@@ -4,7 +4,10 @@ import 'package:pdf_app/core/models/file_status.dart';
 
 part 'library_entry.freezed.dart';
 
-/// A PDF file entry in the user's library.
+/// A PDF file entry in the user's personal library.
+///
+/// Only files explicitly added by the user appear here.
+/// [collectionId] is null when the entry is in the root library.
 @freezed
 class LibraryEntry with _$LibraryEntry {
   const factory LibraryEntry({
@@ -12,5 +15,7 @@ class LibraryEntry with _$LibraryEntry {
     required String name,
     required String path,
     required FileStatus status,
+    DateTime? lastOpenedAt,
+    String? collectionId,
   }) = _LibraryEntry;
 }

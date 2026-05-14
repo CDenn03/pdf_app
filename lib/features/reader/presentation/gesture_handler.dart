@@ -1,34 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/utils/coordinate_mapper.dart';
+import 'package:pdf_app/features/reader/presentation/annotation_toolbar.dart';
 import 'package:pdf_app/features/reader/state/providers.dart';
 
 /// Captures annotation gestures on top of the PDF viewer.
 ///
-/// Has two modes:
-/// - Normal mode: all gestures pass through to [SfPdfViewer] for scroll/zoom.
-/// - Annotation mode: drag creates a highlight, tap creates a note,
-///   long-press opens the bookmark menu.
+/// Behavior depends on [activeTool]:
+/// - [AnnotationTool.highlight]: drag creates a highlight
+/// - [AnnotationTool.note]: tap opens an inline bottom-sheet note input
+/// - [AnnotationTool.bookmark]: tap creates a bookmark
 ///
-/// Toggle annotation mode via the [annotating] flag, controlled by
-/// [ReaderPage] through the toolbar button.
+/// Only inserted into the widget tree when annotation mode is active,
+/// eliminating gesture disambiguation overhead during normal reading.
 class GestureHandler extends ConsumerStatefulWidget {
   const GestureHandler({
     super.key,
     required this.pageSize,
     required this.currentPage,
     required this.pdfId,
-    required this.annotating,
+    required this.activeTool,
   });
 
   final Size pageSize;
   final int currentPage;
   final String pdfId;
-
-  /// When true, gestures are consumed for annotation.
-  /// When false, gestures pass through to the PDF viewer.
-  final bool annotating;
+  final AnnotationTool activeTool;
 
   @override
   ConsumerState<GestureHandler> createState() => _GestureHandlerState();
@@ -38,7 +37,10 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
   Offset? _dragStart;
   Offset? _dragCurrent;
 
+  AnnotationColor get _activeColor => ref.read(activeAnnotationColorProvider);
+
   void _onDragStart(DragStartDetails details) {
+    if (widget.activeTool != AnnotationTool.highlight) return;
     setState(() {
       _dragStart = details.localPosition;
       _dragCurrent = details.localPosition;
@@ -46,6 +48,7 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
+    if (widget.activeTool != AnnotationTool.highlight) return;
     setState(() => _dragCurrent = details.localPosition);
   }
 
@@ -61,6 +64,7 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
             .addHighlight(
               rect: toRelative(rect, widget.pageSize),
               page: widget.currentPage,
+              color: _activeColor,
             );
       }
     }
@@ -72,60 +76,75 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
   }
 
   Future<void> _onTap(TapUpDetails details) async {
-    final text = await showDialog<String>(
-      context: context,
-      builder: (_) => const _NoteDialog(),
-    );
-
-    if (text != null && text.isNotEmpty) {
-      const anchorSize = 24.0;
-      final absoluteRect = Rect.fromCenter(
-        center: details.localPosition,
-        width: anchorSize,
-        height: anchorSize,
-      );
-      ref
-          .read(annotationNotifierProvider.notifier)
-          .addNote(
-            rect: toRelative(absoluteRect, widget.pageSize),
-            text: text,
-            page: widget.currentPage,
-          );
+    switch (widget.activeTool) {
+      case AnnotationTool.highlight:
+        break; // Handled by drag.
+      case AnnotationTool.note:
+        await _addNote(details.localPosition);
+      case AnnotationTool.bookmark:
+        _addBookmark();
     }
   }
 
-  Future<void> _onLongPress(LongPressStartDetails details) async {
-    final pos = details.globalPosition;
-    final value = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(pos.dx, pos.dy, pos.dx + 1, pos.dy + 1),
-      items: const [
-        PopupMenuItem(value: 'bookmark', child: Text('Add Bookmark')),
-      ],
-    );
+  Future<void> _addNote(Offset position) async {
+    final text = await _showNoteInput();
+    if (text == null || text.isEmpty) return;
 
-    if (value == 'bookmark') {
-      ref
-          .read(annotationNotifierProvider.notifier)
-          .addBookmark(page: widget.currentPage);
-    }
+    const anchorSize = 24.0;
+    final absoluteRect = Rect.fromCenter(
+      center: position,
+      width: anchorSize,
+      height: anchorSize,
+    );
+    ref
+        .read(annotationNotifierProvider.notifier)
+        .addNote(
+          rect: toRelative(absoluteRect, widget.pageSize),
+          text: text,
+          page: widget.currentPage,
+          color: _activeColor,
+        );
+  }
+
+  void _addBookmark() {
+    ref
+        .read(annotationNotifierProvider.notifier)
+        .addBookmark(page: widget.currentPage);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Bookmark added on page ${widget.currentPage}'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// Shows a bottom-sheet note input instead of a modal dialog.
+  ///
+  /// Bottom sheet keeps the document visible and feels less disruptive
+  /// than a full modal dialog.
+  Future<String?> _showNoteInput() {
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (ctx) => _NoteInputSheet(),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // In normal mode, let all gestures pass through to SfPdfViewer.
-    if (!widget.annotating) return const SizedBox.expand();
-
     return GestureDetector(
       onPanStart: _onDragStart,
       onPanUpdate: _onDragUpdate,
       onPanEnd: _onDragEnd,
       onTapUp: _onTap,
-      onLongPressStart: _onLongPress,
       child: CustomPaint(
         painter: _DragPreviewPainter(
           dragStart: _dragStart,
           dragCurrent: _dragCurrent,
+          color: _activeColor.overlay,
         ),
         child: const SizedBox.expand(),
       ),
@@ -133,15 +152,16 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
   }
 }
 
-/// Dialog for entering note text.
-class _NoteDialog extends StatefulWidget {
-  const _NoteDialog();
+// ---------------------------------------------------------------------------
+// Note input bottom sheet
+// ---------------------------------------------------------------------------
 
+class _NoteInputSheet extends StatefulWidget {
   @override
-  State<_NoteDialog> createState() => _NoteDialogState();
+  State<_NoteInputSheet> createState() => _NoteInputSheetState();
 }
 
-class _NoteDialogState extends State<_NoteDialog> {
+class _NoteInputSheetState extends State<_NoteInputSheet> {
   final _controller = TextEditingController();
 
   @override
@@ -152,34 +172,67 @@ class _NoteDialogState extends State<_NoteDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Add Note'),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        decoration: const InputDecoration(hintText: 'Enter note text'),
-        maxLines: 3,
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 8,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 24,
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, _controller.text),
-          child: const Text('Save'),
-        ),
-      ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Add note', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            maxLines: 4,
+            decoration: InputDecoration(
+              hintText: 'Write your note…',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding: const EdgeInsets.all(12),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, _controller.text),
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// Paints a semi-transparent preview rectangle during a drag gesture.
+// ---------------------------------------------------------------------------
+// Drag preview painter
+// ---------------------------------------------------------------------------
+
 class _DragPreviewPainter extends CustomPainter {
-  const _DragPreviewPainter({this.dragStart, this.dragCurrent});
+  const _DragPreviewPainter({
+    this.dragStart,
+    this.dragCurrent,
+    required this.color,
+  });
 
   final Offset? dragStart;
   final Offset? dragCurrent;
+  final Color color;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -187,12 +240,14 @@ class _DragPreviewPainter extends CustomPainter {
     canvas.drawRect(
       Rect.fromPoints(dragStart!, dragCurrent!),
       Paint()
-        ..color = Colors.yellow.withValues(alpha: 0.4)
+        ..color = color
         ..style = PaintingStyle.fill,
     );
   }
 
   @override
   bool shouldRepaint(covariant _DragPreviewPainter old) =>
-      old.dragStart != dragStart || old.dragCurrent != dragCurrent;
+      old.dragStart != dragStart ||
+      old.dragCurrent != dragCurrent ||
+      old.color != color;
 }

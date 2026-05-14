@@ -1,5 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'annotation_color.dart';
 import 'annotation_type.dart';
 import 'relative_rect_model.dart';
 
@@ -21,6 +22,7 @@ class Annotation with _$Annotation {
     required AnnotationType type,
     RelativeRectModel? rect,
     String? text,
+    @Default(AnnotationColor.yellow) AnnotationColor color,
     @Default(false) bool isDeleted,
   }) = _Annotation;
 

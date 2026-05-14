@@ -13,5 +13,8 @@ class ReaderState with _$ReaderState {
     @Default(1) int currentPage,
     @Default(1) int totalPages,
     @Default(false) bool isLoaded,
+
+    /// The page to jump to on document load (restored from persistence).
+    @Default(1) int resumePage,
   }) = _ReaderState;
 }

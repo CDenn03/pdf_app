@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdf_app/core/constants.dart';
 import 'package:pdf_app/core/database/annotation_dao.dart';
 import 'package:pdf_app/core/models/annotation.dart';
+import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
 import 'package:pdf_app/core/models/relative_rect_model.dart';
 import 'package:pdf_app/core/utils/debounce.dart';
@@ -14,21 +15,40 @@ import 'package:pdf_app/core/utils/debounce.dart';
 ///
 /// Only loads annotations for `currentPage ± 1` — never the full document set.
 /// All writes are debounced by 300ms per architecture spec.
+///
+/// Maintains an undo stack of recently added annotation IDs so the user
+/// can reverse accidental highlights or notes without opening the panel.
 class AnnotationNotifier extends StateNotifier<List<Annotation>> {
   final AnnotationDao _dao;
   final Debounce _debounce;
 
+  /// Called whenever the undo stack changes so the UI can react.
+  /// In production this updates [canUndoAnnotationProvider].
+  final void Function(bool canUndo)? _onCanUndoChanged;
+
   String _currentPdfId = '';
 
-  AnnotationNotifier({required AnnotationDao dao, required Debounce debounce})
-    : _dao = dao,
-      _debounce = debounce,
-      super([]);
+  final _undoStack = <String>[];
+  static const _maxUndoDepth = 20;
+
+  bool get canUndo => _undoStack.isNotEmpty;
+
+  AnnotationNotifier({
+    required AnnotationDao dao,
+    required Debounce debounce,
+    void Function(bool)? onCanUndoChanged,
+  }) : _dao = dao,
+       _debounce = debounce,
+       _onCanUndoChanged = onCanUndoChanged,
+       super([]);
 
   /// Loads annotations for [page] ± 1 of the given [pdfId].
-  ///
-  /// Only renders annotations for currentPage ± 1 per architecture spec.
   Future<void> loadForPage(String pdfId, int page) async {
+    // Clear undo stack when switching documents.
+    if (pdfId != _currentPdfId) {
+      _undoStack.clear();
+      _syncCanUndo();
+    }
     _currentPdfId = pdfId;
 
     final startPage = max(1, page - 1);
@@ -43,10 +63,24 @@ class AnnotationNotifier extends StateNotifier<List<Annotation>> {
     state = annotations;
   }
 
+  /// Loads ALL non-deleted annotations for [pdfId] — used by the panel.
+  Future<List<Annotation>> loadAllForPdf(String pdfId) async {
+    return _dao.getAllForPdf(pdfId);
+  }
+
   /// Creates a new highlight annotation with a debounced save.
-  void addHighlight({required RelativeRectModel rect, required int page}) {
+  void addHighlight({
+    required RelativeRectModel rect,
+    required int page,
+    AnnotationColor color = AnnotationColor.yellow,
+  }) {
     _addAnnotation(
-      _buildAnnotation(page: page, type: AnnotationType.highlight, rect: rect),
+      _buildAnnotation(
+        page: page,
+        type: AnnotationType.highlight,
+        rect: rect,
+        color: color,
+      ),
     );
   }
 
@@ -55,6 +89,7 @@ class AnnotationNotifier extends StateNotifier<List<Annotation>> {
     required RelativeRectModel rect,
     required String text,
     required int page,
+    AnnotationColor color = AnnotationColor.yellow,
   }) {
     _addAnnotation(
       _buildAnnotation(
@@ -62,6 +97,7 @@ class AnnotationNotifier extends StateNotifier<List<Annotation>> {
         type: AnnotationType.note,
         rect: rect,
         text: text,
+        color: color,
       ),
     );
   }
@@ -74,7 +110,39 @@ class AnnotationNotifier extends StateNotifier<List<Annotation>> {
   /// Soft-deletes an annotation. Never hard-deletes per architecture spec.
   Future<void> removeAnnotation(String id) async {
     state = state.where((a) => a.id != id).toList();
+    _undoStack.remove(id); // removing explicitly — not undoable
+    _syncCanUndo();
     await _dao.softDelete(id);
+  }
+
+  /// Undoes the most recently added annotation by soft-deleting it.
+  ///
+  /// Returns a description of what was undone, or null if nothing to undo.
+  Future<String?> undo() async {
+    if (_undoStack.isEmpty) return null;
+
+    final id = _undoStack.removeLast();
+    _syncCanUndo();
+
+    final annotation = state.firstWhere(
+      (a) => a.id == id,
+      orElse: () => const Annotation(
+        id: '',
+        pdfId: '',
+        page: 0,
+        type: AnnotationType.highlight,
+      ),
+    );
+    if (annotation.id.isEmpty) return null;
+
+    state = state.where((a) => a.id != id).toList();
+    await _dao.softDelete(id);
+
+    return switch (annotation.type) {
+      AnnotationType.highlight => 'Highlight removed',
+      AnnotationType.note => 'Note removed',
+      AnnotationType.bookmark => 'Bookmark removed',
+    };
   }
 
   /// Updates an existing annotation's text (for notes).
@@ -89,16 +157,28 @@ class AnnotationNotifier extends StateNotifier<List<Annotation>> {
     }).toList();
   }
 
-  /// Returns annotations filtered to a specific [page].
-  List<Annotation> annotationsForPage(int page) {
-    return state.where((a) => a.page == page && !a.isDeleted).toList();
+  /// Updates an existing annotation's color.
+  void updateColor(String id, AnnotationColor color) {
+    state = state.map((a) {
+      if (a.id == id) {
+        final updated = a.copyWith(color: color);
+        _debouncedSave(updated);
+        return updated;
+      }
+      return a;
+    }).toList();
   }
+
+  /// Returns annotations filtered to a specific [page].
+  List<Annotation> annotationsForPage(int page) =>
+      state.where((a) => a.page == page && !a.isDeleted).toList();
 
   Annotation _buildAnnotation({
     required int page,
     required AnnotationType type,
     RelativeRectModel? rect,
     String? text,
+    AnnotationColor color = AnnotationColor.yellow,
   }) => Annotation(
     id: uuid.v4(),
     pdfId: _currentPdfId,
@@ -106,11 +186,20 @@ class AnnotationNotifier extends StateNotifier<List<Annotation>> {
     type: type,
     rect: rect,
     text: text,
+    color: color,
   );
 
   void _addAnnotation(Annotation annotation) {
     state = [...state, annotation];
+    // Push to undo stack, capping at max depth.
+    _undoStack.add(annotation.id);
+    if (_undoStack.length > _maxUndoDepth) _undoStack.removeAt(0);
+    _syncCanUndo();
     _debouncedSave(annotation);
+  }
+
+  void _syncCanUndo() {
+    _onCanUndoChanged?.call(_undoStack.isNotEmpty);
   }
 
   void _debouncedSave(Annotation annotation) {

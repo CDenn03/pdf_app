@@ -22,6 +22,7 @@ class DatabaseHelper implements DatabaseProvider {
   DatabaseHelper._internal();
 
   /// Returns the singleton [Database] instance, creating it if necessary.
+  @override
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
@@ -32,7 +33,12 @@ class DatabaseHelper implements DatabaseProvider {
     final dbPath = await getDatabasesPath();
     final path = p.join(dbPath, 'pdf_navigator.db');
 
-    return await openDatabase(path, version: 1, onCreate: _onCreate);
+    return await openDatabase(
+      path,
+      version: 2,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -47,6 +53,7 @@ class DatabaseHelper implements DatabaseProvider {
         rect_bottom REAL,
         rect_right REAL,
         text TEXT,
+        color TEXT NOT NULL DEFAULT 'yellow',
         is_deleted INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -55,5 +62,14 @@ class DatabaseHelper implements DatabaseProvider {
 
     // Required index per architecture spec: indexed (pdf_id, page) queries
     await db.execute('CREATE INDEX idx_pdf_page ON annotations(pdf_id, page)');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Add color column introduced in v2.
+      await db.execute(
+        "ALTER TABLE annotations ADD COLUMN color TEXT NOT NULL DEFAULT 'yellow'",
+      );
+    }
   }
 }

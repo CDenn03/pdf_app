@@ -21,14 +21,13 @@ Annotation _$AnnotationFromJson(Map<String, dynamic> json) {
 
 /// @nodoc
 mixin _$Annotation {
-  String get id => throw _privateConstructorUsedError; // UUID
+  String get id => throw _privateConstructorUsedError;
   String get pdfId => throw _privateConstructorUsedError;
   int get page => throw _privateConstructorUsedError;
   AnnotationType get type => throw _privateConstructorUsedError;
-  RelativeRectModel? get rect =>
-      throw _privateConstructorUsedError; // Nullable for bookmarks
-  String? get text =>
-      throw _privateConstructorUsedError; // Nullable for highlights and bookmarks
+  RelativeRectModel? get rect => throw _privateConstructorUsedError;
+  String? get text => throw _privateConstructorUsedError;
+  AnnotationColor get color => throw _privateConstructorUsedError;
   bool get isDeleted => throw _privateConstructorUsedError;
 
   /// Serializes this Annotation to a JSON map.
@@ -55,6 +54,7 @@ abstract class $AnnotationCopyWith<$Res> {
     AnnotationType type,
     RelativeRectModel? rect,
     String? text,
+    AnnotationColor color,
     bool isDeleted,
   });
 
@@ -82,6 +82,7 @@ class _$AnnotationCopyWithImpl<$Res, $Val extends Annotation>
     Object? type = null,
     Object? rect = freezed,
     Object? text = freezed,
+    Object? color = null,
     Object? isDeleted = null,
   }) {
     return _then(
@@ -110,6 +111,10 @@ class _$AnnotationCopyWithImpl<$Res, $Val extends Annotation>
                 ? _value.text
                 : text // ignore: cast_nullable_to_non_nullable
                       as String?,
+            color: null == color
+                ? _value.color
+                : color // ignore: cast_nullable_to_non_nullable
+                      as AnnotationColor,
             isDeleted: null == isDeleted
                 ? _value.isDeleted
                 : isDeleted // ignore: cast_nullable_to_non_nullable
@@ -150,6 +155,7 @@ abstract class _$$AnnotationImplCopyWith<$Res>
     AnnotationType type,
     RelativeRectModel? rect,
     String? text,
+    AnnotationColor color,
     bool isDeleted,
   });
 
@@ -177,6 +183,7 @@ class __$$AnnotationImplCopyWithImpl<$Res>
     Object? type = null,
     Object? rect = freezed,
     Object? text = freezed,
+    Object? color = null,
     Object? isDeleted = null,
   }) {
     return _then(
@@ -205,6 +212,10 @@ class __$$AnnotationImplCopyWithImpl<$Res>
             ? _value.text
             : text // ignore: cast_nullable_to_non_nullable
                   as String?,
+        color: null == color
+            ? _value.color
+            : color // ignore: cast_nullable_to_non_nullable
+                  as AnnotationColor,
         isDeleted: null == isDeleted
             ? _value.isDeleted
             : isDeleted // ignore: cast_nullable_to_non_nullable
@@ -224,6 +235,7 @@ class _$AnnotationImpl implements _Annotation {
     required this.type,
     this.rect,
     this.text,
+    this.color = AnnotationColor.yellow,
     this.isDeleted = false,
   });
 
@@ -232,7 +244,6 @@ class _$AnnotationImpl implements _Annotation {
 
   @override
   final String id;
-  // UUID
   @override
   final String pdfId;
   @override
@@ -241,17 +252,18 @@ class _$AnnotationImpl implements _Annotation {
   final AnnotationType type;
   @override
   final RelativeRectModel? rect;
-  // Nullable for bookmarks
   @override
   final String? text;
-  // Nullable for highlights and bookmarks
+  @override
+  @JsonKey()
+  final AnnotationColor color;
   @override
   @JsonKey()
   final bool isDeleted;
 
   @override
   String toString() {
-    return 'Annotation(id: $id, pdfId: $pdfId, page: $page, type: $type, rect: $rect, text: $text, isDeleted: $isDeleted)';
+    return 'Annotation(id: $id, pdfId: $pdfId, page: $page, type: $type, rect: $rect, text: $text, color: $color, isDeleted: $isDeleted)';
   }
 
   @override
@@ -265,14 +277,24 @@ class _$AnnotationImpl implements _Annotation {
             (identical(other.type, type) || other.type == type) &&
             (identical(other.rect, rect) || other.rect == rect) &&
             (identical(other.text, text) || other.text == text) &&
+            (identical(other.color, color) || other.color == color) &&
             (identical(other.isDeleted, isDeleted) ||
                 other.isDeleted == isDeleted));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, id, pdfId, page, type, rect, text, isDeleted);
+  int get hashCode => Object.hash(
+    runtimeType,
+    id,
+    pdfId,
+    page,
+    type,
+    rect,
+    text,
+    color,
+    isDeleted,
+  );
 
   /// Create a copy of Annotation
   /// with the given fields replaced by the non-null parameter values.
@@ -296,6 +318,7 @@ abstract class _Annotation implements Annotation {
     required final AnnotationType type,
     final RelativeRectModel? rect,
     final String? text,
+    final AnnotationColor color,
     final bool isDeleted,
   }) = _$AnnotationImpl;
 
@@ -303,7 +326,7 @@ abstract class _Annotation implements Annotation {
       _$AnnotationImpl.fromJson;
 
   @override
-  String get id; // UUID
+  String get id;
   @override
   String get pdfId;
   @override
@@ -311,9 +334,11 @@ abstract class _Annotation implements Annotation {
   @override
   AnnotationType get type;
   @override
-  RelativeRectModel? get rect; // Nullable for bookmarks
+  RelativeRectModel? get rect;
   @override
-  String? get text; // Nullable for highlights and bookmarks
+  String? get text;
+  @override
+  AnnotationColor get color;
   @override
   bool get isDeleted;
 

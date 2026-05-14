@@ -21,6 +21,8 @@ mixin _$LibraryEntry {
   String get name => throw _privateConstructorUsedError;
   String get path => throw _privateConstructorUsedError;
   FileStatus get status => throw _privateConstructorUsedError;
+  DateTime? get lastOpenedAt => throw _privateConstructorUsedError;
+  String? get collectionId => throw _privateConstructorUsedError;
 
   /// Create a copy of LibraryEntry
   /// with the given fields replaced by the non-null parameter values.
@@ -36,7 +38,14 @@ abstract class $LibraryEntryCopyWith<$Res> {
     $Res Function(LibraryEntry) then,
   ) = _$LibraryEntryCopyWithImpl<$Res, LibraryEntry>;
   @useResult
-  $Res call({String id, String name, String path, FileStatus status});
+  $Res call({
+    String id,
+    String name,
+    String path,
+    FileStatus status,
+    DateTime? lastOpenedAt,
+    String? collectionId,
+  });
 }
 
 /// @nodoc
@@ -58,6 +67,8 @@ class _$LibraryEntryCopyWithImpl<$Res, $Val extends LibraryEntry>
     Object? name = null,
     Object? path = null,
     Object? status = null,
+    Object? lastOpenedAt = freezed,
+    Object? collectionId = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -77,6 +88,14 @@ class _$LibraryEntryCopyWithImpl<$Res, $Val extends LibraryEntry>
                 ? _value.status
                 : status // ignore: cast_nullable_to_non_nullable
                       as FileStatus,
+            lastOpenedAt: freezed == lastOpenedAt
+                ? _value.lastOpenedAt
+                : lastOpenedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
+            collectionId: freezed == collectionId
+                ? _value.collectionId
+                : collectionId // ignore: cast_nullable_to_non_nullable
+                      as String?,
           )
           as $Val,
     );
@@ -92,7 +111,14 @@ abstract class _$$LibraryEntryImplCopyWith<$Res>
   ) = __$$LibraryEntryImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String id, String name, String path, FileStatus status});
+  $Res call({
+    String id,
+    String name,
+    String path,
+    FileStatus status,
+    DateTime? lastOpenedAt,
+    String? collectionId,
+  });
 }
 
 /// @nodoc
@@ -113,6 +139,8 @@ class __$$LibraryEntryImplCopyWithImpl<$Res>
     Object? name = null,
     Object? path = null,
     Object? status = null,
+    Object? lastOpenedAt = freezed,
+    Object? collectionId = freezed,
   }) {
     return _then(
       _$LibraryEntryImpl(
@@ -132,6 +160,14 @@ class __$$LibraryEntryImplCopyWithImpl<$Res>
             ? _value.status
             : status // ignore: cast_nullable_to_non_nullable
                   as FileStatus,
+        lastOpenedAt: freezed == lastOpenedAt
+            ? _value.lastOpenedAt
+            : lastOpenedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
+        collectionId: freezed == collectionId
+            ? _value.collectionId
+            : collectionId // ignore: cast_nullable_to_non_nullable
+                  as String?,
       ),
     );
   }
@@ -145,6 +181,8 @@ class _$LibraryEntryImpl implements _LibraryEntry {
     required this.name,
     required this.path,
     required this.status,
+    this.lastOpenedAt,
+    this.collectionId,
   });
 
   @override
@@ -155,10 +193,14 @@ class _$LibraryEntryImpl implements _LibraryEntry {
   final String path;
   @override
   final FileStatus status;
+  @override
+  final DateTime? lastOpenedAt;
+  @override
+  final String? collectionId;
 
   @override
   String toString() {
-    return 'LibraryEntry(id: $id, name: $name, path: $path, status: $status)';
+    return 'LibraryEntry(id: $id, name: $name, path: $path, status: $status, lastOpenedAt: $lastOpenedAt, collectionId: $collectionId)';
   }
 
   @override
@@ -169,11 +211,23 @@ class _$LibraryEntryImpl implements _LibraryEntry {
             (identical(other.id, id) || other.id == id) &&
             (identical(other.name, name) || other.name == name) &&
             (identical(other.path, path) || other.path == path) &&
-            (identical(other.status, status) || other.status == status));
+            (identical(other.status, status) || other.status == status) &&
+            (identical(other.lastOpenedAt, lastOpenedAt) ||
+                other.lastOpenedAt == lastOpenedAt) &&
+            (identical(other.collectionId, collectionId) ||
+                other.collectionId == collectionId));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, id, name, path, status);
+  int get hashCode => Object.hash(
+    runtimeType,
+    id,
+    name,
+    path,
+    status,
+    lastOpenedAt,
+    collectionId,
+  );
 
   /// Create a copy of LibraryEntry
   /// with the given fields replaced by the non-null parameter values.
@@ -190,6 +244,8 @@ abstract class _LibraryEntry implements LibraryEntry {
     required final String name,
     required final String path,
     required final FileStatus status,
+    final DateTime? lastOpenedAt,
+    final String? collectionId,
   }) = _$LibraryEntryImpl;
 
   @override
@@ -200,6 +256,10 @@ abstract class _LibraryEntry implements LibraryEntry {
   String get path;
   @override
   FileStatus get status;
+  @override
+  DateTime? get lastOpenedAt;
+  @override
+  String? get collectionId;
 
   /// Create a copy of LibraryEntry
   /// with the given fields replaced by the non-null parameter values.

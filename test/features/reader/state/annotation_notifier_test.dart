@@ -24,10 +24,10 @@ void main() {
 
   setUp(() {
     dao = MockAnnotationDao();
-    // Use a very long debounce so saves don't fire during tests
     notifier = AnnotationNotifier(
       dao: dao,
       debounce: Debounce(duration: const Duration(seconds: 60)),
+      // No onCanUndoChanged needed in tests — canUndo getter is sufficient.
     );
 
     when(
@@ -75,6 +75,12 @@ void main() {
       notifier.addHighlight(rect: _rect, page: 1);
       verifyNever(() => dao.upsert(any()));
     });
+
+    test('canUndo becomes true after adding', () {
+      expect(notifier.canUndo, false);
+      notifier.addHighlight(rect: _rect, page: 1);
+      expect(notifier.canUndo, true);
+    });
   });
 
   group('addNote', () {
@@ -102,6 +108,43 @@ void main() {
 
       expect(notifier.state, isEmpty);
       verify(() => dao.softDelete(id)).called(1);
+    });
+  });
+
+  group('undo', () {
+    test('removes the most recently added annotation', () async {
+      notifier.addHighlight(rect: _rect, page: 1);
+      expect(notifier.state.length, 1);
+
+      final message = await notifier.undo();
+
+      expect(notifier.state, isEmpty);
+      expect(message, 'Highlight removed');
+    });
+
+    test('returns null when nothing to undo', () async {
+      final message = await notifier.undo();
+      expect(message, isNull);
+    });
+
+    test('canUndo becomes false after undoing the only annotation', () async {
+      notifier.addHighlight(rect: _rect, page: 1);
+      await notifier.undo();
+      expect(notifier.canUndo, false);
+    });
+
+    test('undoes in LIFO order', () async {
+      notifier.addHighlight(rect: _rect, page: 1);
+      notifier.addNote(rect: _rect, text: 'note', page: 1);
+
+      final msg1 = await notifier.undo();
+      expect(msg1, 'Note removed');
+      expect(notifier.state.length, 1);
+      expect(notifier.state.first.type, AnnotationType.highlight);
+
+      final msg2 = await notifier.undo();
+      expect(msg2, 'Highlight removed');
+      expect(notifier.state, isEmpty);
     });
   });
 

@@ -22,6 +22,9 @@ mixin _$ReaderState {
   int get totalPages => throw _privateConstructorUsedError;
   bool get isLoaded => throw _privateConstructorUsedError;
 
+  /// The page to jump to on document load (restored from persistence).
+  int get resumePage => throw _privateConstructorUsedError;
+
   /// Create a copy of ReaderState
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -36,7 +39,13 @@ abstract class $ReaderStateCopyWith<$Res> {
     $Res Function(ReaderState) then,
   ) = _$ReaderStateCopyWithImpl<$Res, ReaderState>;
   @useResult
-  $Res call({String pdfId, int currentPage, int totalPages, bool isLoaded});
+  $Res call({
+    String pdfId,
+    int currentPage,
+    int totalPages,
+    bool isLoaded,
+    int resumePage,
+  });
 }
 
 /// @nodoc
@@ -58,6 +67,7 @@ class _$ReaderStateCopyWithImpl<$Res, $Val extends ReaderState>
     Object? currentPage = null,
     Object? totalPages = null,
     Object? isLoaded = null,
+    Object? resumePage = null,
   }) {
     return _then(
       _value.copyWith(
@@ -77,6 +87,10 @@ class _$ReaderStateCopyWithImpl<$Res, $Val extends ReaderState>
                 ? _value.isLoaded
                 : isLoaded // ignore: cast_nullable_to_non_nullable
                       as bool,
+            resumePage: null == resumePage
+                ? _value.resumePage
+                : resumePage // ignore: cast_nullable_to_non_nullable
+                      as int,
           )
           as $Val,
     );
@@ -92,7 +106,13 @@ abstract class _$$ReaderStateImplCopyWith<$Res>
   ) = __$$ReaderStateImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String pdfId, int currentPage, int totalPages, bool isLoaded});
+  $Res call({
+    String pdfId,
+    int currentPage,
+    int totalPages,
+    bool isLoaded,
+    int resumePage,
+  });
 }
 
 /// @nodoc
@@ -113,6 +133,7 @@ class __$$ReaderStateImplCopyWithImpl<$Res>
     Object? currentPage = null,
     Object? totalPages = null,
     Object? isLoaded = null,
+    Object? resumePage = null,
   }) {
     return _then(
       _$ReaderStateImpl(
@@ -132,6 +153,10 @@ class __$$ReaderStateImplCopyWithImpl<$Res>
             ? _value.isLoaded
             : isLoaded // ignore: cast_nullable_to_non_nullable
                   as bool,
+        resumePage: null == resumePage
+            ? _value.resumePage
+            : resumePage // ignore: cast_nullable_to_non_nullable
+                  as int,
       ),
     );
   }
@@ -145,6 +170,7 @@ class _$ReaderStateImpl implements _ReaderState {
     this.currentPage = 1,
     this.totalPages = 1,
     this.isLoaded = false,
+    this.resumePage = 1,
   });
 
   @override
@@ -160,9 +186,14 @@ class _$ReaderStateImpl implements _ReaderState {
   @JsonKey()
   final bool isLoaded;
 
+  /// The page to jump to on document load (restored from persistence).
+  @override
+  @JsonKey()
+  final int resumePage;
+
   @override
   String toString() {
-    return 'ReaderState(pdfId: $pdfId, currentPage: $currentPage, totalPages: $totalPages, isLoaded: $isLoaded)';
+    return 'ReaderState(pdfId: $pdfId, currentPage: $currentPage, totalPages: $totalPages, isLoaded: $isLoaded, resumePage: $resumePage)';
   }
 
   @override
@@ -176,12 +207,20 @@ class _$ReaderStateImpl implements _ReaderState {
             (identical(other.totalPages, totalPages) ||
                 other.totalPages == totalPages) &&
             (identical(other.isLoaded, isLoaded) ||
-                other.isLoaded == isLoaded));
+                other.isLoaded == isLoaded) &&
+            (identical(other.resumePage, resumePage) ||
+                other.resumePage == resumePage));
   }
 
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, pdfId, currentPage, totalPages, isLoaded);
+  int get hashCode => Object.hash(
+    runtimeType,
+    pdfId,
+    currentPage,
+    totalPages,
+    isLoaded,
+    resumePage,
+  );
 
   /// Create a copy of ReaderState
   /// with the given fields replaced by the non-null parameter values.
@@ -198,6 +237,7 @@ abstract class _ReaderState implements ReaderState {
     final int currentPage,
     final int totalPages,
     final bool isLoaded,
+    final int resumePage,
   }) = _$ReaderStateImpl;
 
   @override
@@ -208,6 +248,10 @@ abstract class _ReaderState implements ReaderState {
   int get totalPages;
   @override
   bool get isLoaded;
+
+  /// The page to jump to on document load (restored from persistence).
+  @override
+  int get resumePage;
 
   /// Create a copy of ReaderState
   /// with the given fields replaced by the non-null parameter values.

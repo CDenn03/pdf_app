@@ -16,6 +16,9 @@ _$AnnotationImpl _$$AnnotationImplFromJson(Map<String, dynamic> json) =>
           ? null
           : RelativeRectModel.fromJson(json['rect'] as Map<String, dynamic>),
       text: json['text'] as String?,
+      color:
+          $enumDecodeNullable(_$AnnotationColorEnumMap, json['color']) ??
+          AnnotationColor.yellow,
       isDeleted: json['isDeleted'] as bool? ?? false,
     );
 
@@ -27,6 +30,7 @@ Map<String, dynamic> _$$AnnotationImplToJson(_$AnnotationImpl instance) =>
       'type': _$AnnotationTypeEnumMap[instance.type]!,
       'rect': instance.rect,
       'text': instance.text,
+      'color': _$AnnotationColorEnumMap[instance.color]!,
       'isDeleted': instance.isDeleted,
     };
 
@@ -34,4 +38,11 @@ const _$AnnotationTypeEnumMap = {
   AnnotationType.highlight: 'highlight',
   AnnotationType.note: 'note',
   AnnotationType.bookmark: 'bookmark',
+};
+
+const _$AnnotationColorEnumMap = {
+  AnnotationColor.yellow: 'yellow',
+  AnnotationColor.green: 'green',
+  AnnotationColor.blue: 'blue',
+  AnnotationColor.pink: 'pink',
 };

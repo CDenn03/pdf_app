@@ -1,36 +1,76 @@
 import 'package:flutter/material.dart';
 
-import 'package:pdf_app/core/models/relative_rect_model.dart';
+import 'package:pdf_app/core/models/annotation.dart';
+import 'package:pdf_app/core/models/annotation_color.dart';
+import 'package:pdf_app/core/models/annotation_type.dart';
 import 'package:pdf_app/core/utils/coordinate_mapper.dart';
 
-/// A [CustomPainter] that renders highlight overlays on top of a PDF page.
+/// A [CustomPainter] that renders annotation overlays on top of a PDF page.
 ///
-/// All highlight positions are stored as [RelativeRectModel] (0.0–1.0) and
-/// converted to absolute pixel positions using the rendered [pageSize].
+/// Highlights are rendered as semi-transparent colored rectangles.
+/// Note anchors are rendered as small speech-bubble icons so they are
+/// visible without obstructing reading.
 ///
-/// This painter should be wrapped in [IgnorePointer] so gestures pass through
-/// to the PDF viewer beneath.
+/// Wrapped in [IgnorePointer] so gestures pass through to the viewer.
 class HighlightPainter extends CustomPainter {
-  final List<RelativeRectModel> highlights;
+  final List<Annotation> annotations;
   final Size pageSize;
 
-  HighlightPainter({required this.highlights, required this.pageSize});
+  HighlightPainter({required this.annotations, required this.pageSize});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.yellow.withValues(alpha: 0.35)
-      ..style = PaintingStyle.fill;
+    for (final annotation in annotations) {
+      if (annotation.isDeleted) continue;
 
-    for (final highlight in highlights) {
-      final rect = toAbsolute(highlight, pageSize);
-      canvas.drawRect(rect, paint);
+      switch (annotation.type) {
+        case AnnotationType.highlight:
+          _paintHighlight(canvas, annotation);
+        case AnnotationType.note:
+          _paintNoteAnchor(canvas, annotation);
+        case AnnotationType.bookmark:
+          break; // Bookmarks have no spatial extent.
+      }
     }
   }
 
-  @override
-  bool shouldRepaint(covariant HighlightPainter oldDelegate) {
-    return oldDelegate.highlights != highlights ||
-        oldDelegate.pageSize != pageSize;
+  void _paintHighlight(Canvas canvas, Annotation annotation) {
+    final rect = annotation.rect;
+    if (rect == null) return;
+
+    final absoluteRect = toAbsolute(rect, pageSize);
+    canvas.drawRect(
+      absoluteRect,
+      Paint()
+        ..color = annotation.color.overlay
+        ..style = PaintingStyle.fill,
+    );
   }
+
+  void _paintNoteAnchor(Canvas canvas, Annotation annotation) {
+    final rect = annotation.rect;
+    if (rect == null) return;
+
+    // Draw a small filled circle as the note anchor.
+    final center = toAbsolute(rect, pageSize).center;
+    final paint = Paint()
+      ..color = annotation.color.solid
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(center, 8, paint);
+
+    // White dot in center for contrast.
+    canvas.drawCircle(
+      center,
+      3,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.fill,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant HighlightPainter oldDelegate) =>
+      oldDelegate.annotations != annotations ||
+      oldDelegate.pageSize != pageSize;
 }
