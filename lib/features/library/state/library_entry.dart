@@ -9,7 +9,7 @@ part 'library_entry.freezed.dart';
 /// Only files explicitly added by the user appear here.
 /// [collectionId] is null when the entry is in the root library.
 @freezed
-class LibraryEntry with _$LibraryEntry {
+abstract class LibraryEntry with _$LibraryEntry {
   const factory LibraryEntry({
     required String id,
     required String name,

@@ -167,6 +167,14 @@ class _AnnotationItem extends StatelessWidget {
       AnnotationType.bookmark => (Icons.bookmark_outline, 'Bookmark'),
     };
 
+    // Display text: for bookmarks use the label, for notes use the text,
+    // otherwise fall back to the type name.
+    final displayText = switch (annotation.type) {
+      AnnotationType.bookmark => annotation.label ?? label,
+      AnnotationType.note => annotation.text ?? label,
+      AnnotationType.highlight => label,
+    };
+
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
       leading: Container(
@@ -179,7 +187,7 @@ class _AnnotationItem extends StatelessWidget {
         child: Icon(icon, size: 16, color: annotation.color.solid),
       ),
       title: Text(
-        annotation.text ?? label,
+        displayText,
         style: theme.textTheme.bodyMedium,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,

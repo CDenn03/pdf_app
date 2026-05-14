@@ -78,7 +78,7 @@ class _PanelHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: Text(title, style: theme.textTheme.titleMedium)),
-          if (trailing != null) trailing!,
+          ?trailing,
           IconButton(
             icon: const Icon(Icons.close, size: 20),
             onPressed: () => Navigator.of(context).pop(),

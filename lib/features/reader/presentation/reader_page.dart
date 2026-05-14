@@ -10,8 +10,10 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import 'package:pdf_app/core/constants.dart';
 import 'package:pdf_app/core/models/annotation.dart' as app;
+import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
 import 'package:pdf_app/core/theme/reading_mode.dart';
+import 'package:pdf_app/core/theme/scroll_direction.dart';
 import 'package:pdf_app/features/library/state/library_providers.dart';
 import 'package:pdf_app/features/reader/presentation/annotation_panel.dart';
 import 'package:pdf_app/features/reader/presentation/annotation_toolbar.dart';
@@ -69,6 +71,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   // Reading mode.
   ReadingMode _readingMode = ReadingMode.light;
+
+  // Scroll direction.
+  ScrollDirection _scrollDirection = ScrollDirection.paginated;
 
   // Bookmark state for current page.
   bool _currentPageBookmarked = false;
@@ -233,12 +238,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             .read(annotationNotifierProvider.notifier)
             .removeAnnotation(bookmark.id);
       }
+      setState(() => _currentPageBookmarked = false);
     } else {
-      ref
-          .read(annotationNotifierProvider.notifier)
-          .addBookmark(page: _currentPage);
+      _addBookmarkWithLabel();
     }
-    setState(() => _currentPageBookmarked = !_currentPageBookmarked);
+  }
+
+  Future<void> _addBookmarkWithLabel() async {
+    final label = await showDialog<String>(
+      context: context,
+      builder: (ctx) =>
+          _BookmarkLabelDialog(defaultLabel: 'Page $_currentPage'),
+    );
+    // null = cancelled, empty string = use default
+    if (label == null) return; // user cancelled
+    ref
+        .read(annotationNotifierProvider.notifier)
+        .addBookmark(
+          page: _currentPage,
+          label: label.trim().isEmpty ? null : label.trim(),
+        );
+    setState(() => _currentPageBookmarked = true);
   }
 
   // ---------------------------------------------------------------------------
@@ -312,6 +332,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             context: context,
             currentMode: _readingMode,
             onModeChanged: (mode) => setState(() => _readingMode = mode),
+            currentScrollDirection: _scrollDirection,
+            onScrollDirectionChanged: (dir) =>
+                setState(() => _scrollDirection = dir),
           ).then((_) => _showBars());
         },
       ),
@@ -343,6 +366,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         onToolChanged: (tool) => setState(() => _activeTool = tool),
         onExit: _exitAnnotationMode,
         onUndo: _performUndo,
+        readingMode: _readingMode,
       );
     } else if (_barsVisible) {
       bottomBar = _BottomActionBar(
@@ -383,9 +407,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     return Stack(
       children: [
         // Layer 1: PDF viewer, wrapped in a color filter for reading mode.
+        // _ScrollAmplifier is only active in paginated mode — in continuous
+        // mode SfPdfViewer handles its own scroll physics natively.
         _ScrollAmplifier(
           controller: _pdfController,
-          enabled: !_annotating,
+          enabled:
+              !_annotating && _scrollDirection == ScrollDirection.paginated,
           child: _ReadingModeFilter(mode: _readingMode, child: _buildViewer()),
         ),
 
@@ -403,16 +430,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
           ),
 
-        // Layer 3: Annotation overlays (non-interactive).
+        // Layer 3: Annotation overlays.
+        // Notes get a tap-through layer so tapping a note anchor shows
+        // the note text in a non-invasive tooltip.
+        // Highlights and bookmarks are purely visual (IgnorePointer).
         if (_pageReady && visibleAnnotations.isNotEmpty)
           Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: HighlightPainter(
-                  annotations: visibleAnnotations,
-                  pageSize: _pageSize,
-                ),
-              ),
+            child: _AnnotationOverlay(
+              annotations: visibleAnnotations,
+              pageSize: _pageSize,
             ),
           ),
 
@@ -455,14 +481,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ? PdfInteractionMode.pan
         : PdfInteractionMode.selection;
 
-    // Pass the reading mode background color so the viewer's page gaps
-    // and margins match the selected theme.
+    // Paginated = single page, swipe left/right.
+    // Continuous = all pages in a vertical scroll.
+    final layoutMode = _scrollDirection == ScrollDirection.continuous
+        ? PdfPageLayoutMode.continuous
+        : PdfPageLayoutMode.single;
 
     if (_isAsset) {
       return SfPdfViewer.asset(
         widget.pdfPath,
         controller: _pdfController,
         interactionMode: interactionMode,
+        pageLayoutMode: layoutMode,
         pageSpacing: 4,
         onDocumentLoaded: _onDocumentLoaded,
         onDocumentLoadFailed: _onDocumentLoadFailed,
@@ -477,6 +507,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       File(widget.pdfPath),
       controller: _pdfController,
       interactionMode: interactionMode,
+      pageLayoutMode: layoutMode,
       pageSpacing: 4,
       onDocumentLoaded: _onDocumentLoaded,
       onDocumentLoadFailed: _onDocumentLoadFailed,
@@ -492,6 +523,119 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final path = widget.pdfPath;
     final name = path.split('/').last;
     return name.endsWith('.pdf') ? name.substring(0, name.length - 4) : name;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Annotation overlay — highlights (non-interactive) + note tap targets
+// ---------------------------------------------------------------------------
+
+/// Renders annotation overlays and handles taps on note anchors.
+///
+/// Highlights and bookmarks are wrapped in [IgnorePointer] so touches
+/// pass through to the PDF viewer. Note anchors are tappable — a tap
+/// shows the note text in a non-invasive bottom tooltip.
+class _AnnotationOverlay extends StatelessWidget {
+  const _AnnotationOverlay({required this.annotations, required this.pageSize});
+
+  final List<app.Annotation> annotations;
+  final Size pageSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final notes = annotations
+        .where((a) => a.type == AnnotationType.note && a.rect != null)
+        .toList();
+
+    return Stack(
+      children: [
+        // Non-interactive paint layer for highlights + note anchors.
+        IgnorePointer(
+          child: CustomPaint(
+            painter: HighlightPainter(
+              annotations: annotations,
+              pageSize: pageSize,
+            ),
+            child: const SizedBox.expand(),
+          ),
+        ),
+        // Tap targets for notes — positioned over each note anchor.
+        for (final note in notes)
+          _NoteTapTarget(annotation: note, pageSize: pageSize),
+      ],
+    );
+  }
+}
+
+/// A transparent tap target positioned over a note anchor circle.
+///
+/// On tap, shows the note text in a small bottom sheet tooltip.
+class _NoteTapTarget extends StatelessWidget {
+  const _NoteTapTarget({required this.annotation, required this.pageSize});
+
+  final app.Annotation annotation;
+  final Size pageSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final rect = annotation.rect!;
+    // Convert relative coords to absolute, then position a tap target.
+    final left = rect.left * pageSize.width - 16;
+    final top = rect.top * pageSize.height - 16;
+
+    return Positioned(
+      left: left.clamp(0.0, double.infinity),
+      top: top.clamp(0.0, double.infinity),
+      child: GestureDetector(
+        onTap: () => _showNoteTooltip(context),
+        child: const SizedBox(width: 32, height: 32),
+      ),
+    );
+  }
+
+  void _showNoteTooltip(BuildContext context) {
+    final text = annotation.text ?? '';
+    if (text.isEmpty) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+      builder: (ctx) => _NoteTooltipSheet(text: text, color: annotation.color),
+    );
+  }
+}
+
+/// A compact, non-invasive bottom sheet that shows a note's text.
+class _NoteTooltipSheet extends StatelessWidget {
+  const _NoteTooltipSheet({required this.text, required this.color});
+
+  final String text;
+  final AnnotationColor color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 4,
+              height: 48,
+              margin: const EdgeInsets.only(right: 12, top: 2),
+              decoration: BoxDecoration(
+                color: color.solid,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -519,6 +663,14 @@ class _ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Derive a high-contrast text style directly from the reading mode colors
+    // rather than relying on AppBarTheme, which may apply the wrong color.
+    final titleStyle = TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w500,
+      color: readingMode.primaryText,
+    );
+
     return AppBar(
       backgroundColor: readingMode.controlSurface,
       foregroundColor: readingMode.primaryText,
@@ -527,7 +679,7 @@ class _ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
         onPressed: onBack,
         tooltip: 'Back',
       ),
-      title: Text(title, overflow: TextOverflow.ellipsis),
+      title: Text(title, overflow: TextOverflow.ellipsis, style: titleStyle),
       actions: [
         IconButton(
           icon: Icon(isBookmarked ? Icons.bookmark : Icons.bookmark_outline),
@@ -980,6 +1132,66 @@ class _JumpToPageDialog extends StatelessWidget {
     if (value != null && value >= 1 && value <= totalPages) {
       Navigator.pop(context, value);
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bookmark label dialog
+// ---------------------------------------------------------------------------
+
+/// Asks the user for an optional bookmark name.
+///
+/// Pressing Save with an empty field uses the default label.
+/// Pressing Cancel returns null (no bookmark created).
+class _BookmarkLabelDialog extends StatefulWidget {
+  const _BookmarkLabelDialog({required this.defaultLabel});
+
+  final String defaultLabel;
+
+  @override
+  State<_BookmarkLabelDialog> createState() => _BookmarkLabelDialogState();
+}
+
+class _BookmarkLabelDialogState extends State<_BookmarkLabelDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add bookmark'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: InputDecoration(
+          hintText: widget.defaultLabel,
+          helperText: 'Leave blank to use default name',
+          border: const OutlineInputBorder(),
+        ),
+        onSubmitted: (_) => Navigator.pop(context, _controller.text),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context), // null = cancelled
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          child: const Text('Save'),
+        ),
+      ],
+    );
   }
 }
 

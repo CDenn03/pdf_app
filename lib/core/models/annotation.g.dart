@@ -6,23 +6,23 @@ part of 'annotation.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$AnnotationImpl _$$AnnotationImplFromJson(Map<String, dynamic> json) =>
-    _$AnnotationImpl(
-      id: json['id'] as String,
-      pdfId: json['pdfId'] as String,
-      page: (json['page'] as num).toInt(),
-      type: $enumDecode(_$AnnotationTypeEnumMap, json['type']),
-      rect: json['rect'] == null
-          ? null
-          : RelativeRectModel.fromJson(json['rect'] as Map<String, dynamic>),
-      text: json['text'] as String?,
-      color:
-          $enumDecodeNullable(_$AnnotationColorEnumMap, json['color']) ??
-          AnnotationColor.yellow,
-      isDeleted: json['isDeleted'] as bool? ?? false,
-    );
+_Annotation _$AnnotationFromJson(Map<String, dynamic> json) => _Annotation(
+  id: json['id'] as String,
+  pdfId: json['pdfId'] as String,
+  page: (json['page'] as num).toInt(),
+  type: $enumDecode(_$AnnotationTypeEnumMap, json['type']),
+  rect: json['rect'] == null
+      ? null
+      : RelativeRectModel.fromJson(json['rect'] as Map<String, dynamic>),
+  text: json['text'] as String?,
+  label: json['label'] as String?,
+  color:
+      $enumDecodeNullable(_$AnnotationColorEnumMap, json['color']) ??
+      AnnotationColor.yellow,
+  isDeleted: json['isDeleted'] as bool? ?? false,
+);
 
-Map<String, dynamic> _$$AnnotationImplToJson(_$AnnotationImpl instance) =>
+Map<String, dynamic> _$AnnotationToJson(_Annotation instance) =>
     <String, dynamic>{
       'id': instance.id,
       'pdfId': instance.pdfId,
@@ -30,6 +30,7 @@ Map<String, dynamic> _$$AnnotationImplToJson(_$AnnotationImpl instance) =>
       'type': _$AnnotationTypeEnumMap[instance.type]!,
       'rect': instance.rect,
       'text': instance.text,
+      'label': instance.label,
       'color': _$AnnotationColorEnumMap[instance.color]!,
       'isDeleted': instance.isDeleted,
     };

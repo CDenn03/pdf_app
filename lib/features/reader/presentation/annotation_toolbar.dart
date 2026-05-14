@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:pdf_app/core/models/annotation_color.dart';
+import 'package:pdf_app/core/theme/reading_mode.dart';
 import 'package:pdf_app/features/reader/state/providers.dart';
 
 /// The active annotation tool within annotation mode.
@@ -18,74 +19,89 @@ class AnnotationToolbar extends ConsumerWidget {
     required this.onToolChanged,
     required this.onExit,
     required this.onUndo,
+    required this.readingMode,
   });
 
   final AnnotationTool activeTool;
   final void Function(AnnotationTool) onToolChanged;
   final VoidCallback onExit;
   final VoidCallback onUndo;
+  final ReadingMode readingMode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activeColor = ref.watch(activeAnnotationColorProvider);
     final canUndo = ref.watch(canUndoAnnotationProvider);
-    final theme = Theme.of(context);
 
     return Container(
-      color: const Color(0xFFFFF9C4).withValues(alpha: 0.95),
+      color: readingMode.controlSurface,
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(
             children: [
-              _ToolButton(
-                icon: Icons.highlight,
-                label: 'Highlight',
-                selected: activeTool == AnnotationTool.highlight,
-                onTap: () => onToolChanged(AnnotationTool.highlight),
+              // Tool buttons — each gets equal space, text truncates if needed.
+              Expanded(
+                child: _ToolButton(
+                  icon: Icons.highlight,
+                  label: 'Highlight',
+                  selected: activeTool == AnnotationTool.highlight,
+                  color: readingMode.primaryText,
+                  onTap: () => onToolChanged(AnnotationTool.highlight),
+                ),
               ),
-              _ToolButton(
-                icon: Icons.sticky_note_2_outlined,
-                label: 'Note',
-                selected: activeTool == AnnotationTool.note,
-                onTap: () => onToolChanged(AnnotationTool.note),
+              Expanded(
+                child: _ToolButton(
+                  icon: Icons.sticky_note_2_outlined,
+                  label: 'Note',
+                  selected: activeTool == AnnotationTool.note,
+                  color: readingMode.primaryText,
+                  onTap: () => onToolChanged(AnnotationTool.note),
+                ),
               ),
-              _ToolButton(
-                icon: Icons.bookmark_outline,
-                label: 'Bookmark',
-                selected: activeTool == AnnotationTool.bookmark,
-                onTap: () => onToolChanged(AnnotationTool.bookmark),
+              Expanded(
+                child: _ToolButton(
+                  icon: Icons.bookmark_outline,
+                  label: 'Bookmark',
+                  selected: activeTool == AnnotationTool.bookmark,
+                  color: readingMode.primaryText,
+                  onTap: () => onToolChanged(AnnotationTool.bookmark),
+                ),
               ),
-              if (activeTool != AnnotationTool.bookmark) ...[
-                const SizedBox(width: 4),
+              // Color picker — only for highlight/note, fixed width.
+              if (activeTool != AnnotationTool.bookmark)
                 _ColorPicker(
                   activeColor: activeColor,
                   onColorSelected: (color) {
-                    ref.read(activeAnnotationColorProvider.notifier).state =
-                        color;
+                    ref
+                        .read(activeAnnotationColorProvider.notifier)
+                        .setValue(color);
                   },
                 ),
-              ],
-              const Spacer(),
-              // Undo button — greyed out when nothing to undo.
+              // Undo + Done — fixed width.
               IconButton(
-                icon: const Icon(Icons.undo, size: 20),
+                icon: Icon(
+                  Icons.undo,
+                  size: 20,
+                  color: canUndo
+                      ? readingMode.primaryText
+                      : readingMode.primaryText.withValues(alpha: 0.3),
+                ),
                 tooltip: 'Undo',
                 onPressed: canUndo ? onUndo : null,
-                color: theme.colorScheme.onSurface,
-                disabledColor: theme.colorScheme.onSurface.withValues(
-                  alpha: 0.3,
-                ),
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                padding: EdgeInsets.zero,
               ),
-              TextButton.icon(
+              TextButton(
                 onPressed: onExit,
-                icon: const Icon(Icons.close, size: 18),
-                label: const Text('Done'),
                 style: TextButton.styleFrom(
-                  foregroundColor: theme.colorScheme.onSurface,
-                  textStyle: theme.textTheme.labelLarge,
+                  foregroundColor: readingMode.primaryText,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(48, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
+                child: const Text('Done', style: TextStyle(fontSize: 13)),
               ),
             ],
           ),
@@ -100,12 +116,14 @@ class _ToolButton extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.selected,
+    required this.color,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
+  final Color color;
   final VoidCallback onTap;
 
   @override
@@ -115,7 +133,7 @@ class _ToolButton extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         decoration: BoxDecoration(
           color: selected
               ? theme.colorScheme.primary.withValues(alpha: 0.12)
@@ -127,20 +145,17 @@ class _ToolButton extends StatelessWidget {
           children: [
             Icon(
               icon,
-              size: 20,
-              color: selected
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurface,
+              size: 18,
+              color: selected ? theme.colorScheme.primary : color,
             ),
             const SizedBox(height: 2),
             Text(
               label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: selected
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface,
+              style: TextStyle(
                 fontSize: 10,
+                color: selected ? theme.colorScheme.primary : color,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

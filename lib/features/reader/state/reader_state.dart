@@ -7,7 +7,7 @@ part 'reader_state.freezed.dart';
 /// Kept separate from annotation state to prevent rebuild storms
 /// per architecture spec.
 @freezed
-class ReaderState with _$ReaderState {
+abstract class ReaderState with _$ReaderState {
   const factory ReaderState({
     @Default('') String pdfId,
     @Default(1) int currentPage,

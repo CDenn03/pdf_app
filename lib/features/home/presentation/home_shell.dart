@@ -65,7 +65,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   }
 
   Future<void> _importFile() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
     );

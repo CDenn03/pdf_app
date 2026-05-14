@@ -9,6 +9,7 @@ import 'package:pdf_app/core/models/annotation.dart';
 import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
 import 'package:pdf_app/core/models/relative_rect_model.dart';
+import 'package:pdf_app/core/providers.dart';
 import 'package:pdf_app/core/utils/debounce.dart';
 
 /// Manages annotation state for the currently viewed PDF.
@@ -18,36 +19,28 @@ import 'package:pdf_app/core/utils/debounce.dart';
 ///
 /// Maintains an undo stack of recently added annotation IDs so the user
 /// can reverse accidental highlights or notes without opening the panel.
-class AnnotationNotifier extends StateNotifier<List<Annotation>> {
-  final AnnotationDao _dao;
-  final Debounce _debounce;
-
-  /// Called whenever the undo stack changes so the UI can react.
-  /// In production this updates [canUndoAnnotationProvider].
-  final void Function(bool canUndo)? _onCanUndoChanged;
+class AnnotationNotifier extends Notifier<List<Annotation>> {
+  late final AnnotationDao _dao;
+  late final Debounce _debounce;
 
   String _currentPdfId = '';
-
   final _undoStack = <String>[];
   static const _maxUndoDepth = 20;
 
   bool get canUndo => _undoStack.isNotEmpty;
 
-  AnnotationNotifier({
-    required AnnotationDao dao,
-    required Debounce debounce,
-    void Function(bool)? onCanUndoChanged,
-  }) : _dao = dao,
-       _debounce = debounce,
-       _onCanUndoChanged = onCanUndoChanged,
-       super([]);
+  @override
+  List<Annotation> build() {
+    _dao = ref.read(annotationDaoProvider);
+    _debounce = Debounce();
+    ref.onDispose(_debounce.dispose);
+    return [];
+  }
 
   /// Loads annotations for [page] ± 1 of the given [pdfId].
   Future<void> loadForPage(String pdfId, int page) async {
-    // Clear undo stack when switching documents.
     if (pdfId != _currentPdfId) {
       _undoStack.clear();
-      _syncCanUndo();
     }
     _currentPdfId = pdfId;
 
@@ -59,7 +52,6 @@ class AnnotationNotifier extends StateNotifier<List<Annotation>> {
       startPage,
       endPage,
     );
-
     state = annotations;
   }
 
@@ -103,15 +95,23 @@ class AnnotationNotifier extends StateNotifier<List<Annotation>> {
   }
 
   /// Creates a new bookmark annotation (no rect) with a debounced save.
-  void addBookmark({required int page}) {
-    _addAnnotation(_buildAnnotation(page: page, type: AnnotationType.bookmark));
+  ///
+  /// [label] is an optional user-defined name shown in the annotations panel.
+  /// Defaults to "Page N" if not provided.
+  void addBookmark({required int page, String? label}) {
+    _addAnnotation(
+      _buildAnnotation(
+        page: page,
+        type: AnnotationType.bookmark,
+        label: label ?? 'Page $page',
+      ),
+    );
   }
 
   /// Soft-deletes an annotation. Never hard-deletes per architecture spec.
   Future<void> removeAnnotation(String id) async {
     state = state.where((a) => a.id != id).toList();
-    _undoStack.remove(id); // removing explicitly — not undoable
-    _syncCanUndo();
+    _undoStack.remove(id);
     await _dao.softDelete(id);
   }
 
@@ -122,7 +122,6 @@ class AnnotationNotifier extends StateNotifier<List<Annotation>> {
     if (_undoStack.isEmpty) return null;
 
     final id = _undoStack.removeLast();
-    _syncCanUndo();
 
     final annotation = state.firstWhere(
       (a) => a.id == id,
@@ -178,6 +177,7 @@ class AnnotationNotifier extends StateNotifier<List<Annotation>> {
     required AnnotationType type,
     RelativeRectModel? rect,
     String? text,
+    String? label,
     AnnotationColor color = AnnotationColor.yellow,
   }) => Annotation(
     id: uuid.v4(),
@@ -186,20 +186,15 @@ class AnnotationNotifier extends StateNotifier<List<Annotation>> {
     type: type,
     rect: rect,
     text: text,
+    label: label,
     color: color,
   );
 
   void _addAnnotation(Annotation annotation) {
     state = [...state, annotation];
-    // Push to undo stack, capping at max depth.
     _undoStack.add(annotation.id);
     if (_undoStack.length > _maxUndoDepth) _undoStack.removeAt(0);
-    _syncCanUndo();
     _debouncedSave(annotation);
-  }
-
-  void _syncCanUndo() {
-    _onCanUndoChanged?.call(_undoStack.isNotEmpty);
   }
 
   void _debouncedSave(Annotation annotation) {
@@ -216,11 +211,5 @@ class AnnotationNotifier extends StateNotifier<List<Annotation>> {
         );
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _debounce.dispose();
-    super.dispose();
   }
 }

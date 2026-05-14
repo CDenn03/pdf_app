@@ -35,7 +35,7 @@ class DatabaseHelper implements DatabaseProvider {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -53,6 +53,7 @@ class DatabaseHelper implements DatabaseProvider {
         rect_bottom REAL,
         rect_right REAL,
         text TEXT,
+        label TEXT,
         color TEXT NOT NULL DEFAULT 'yellow',
         is_deleted INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -66,10 +67,12 @@ class DatabaseHelper implements DatabaseProvider {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      // Add color column introduced in v2.
       await db.execute(
         "ALTER TABLE annotations ADD COLUMN color TEXT NOT NULL DEFAULT 'yellow'",
       );
+    }
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE annotations ADD COLUMN label TEXT');
     }
   }
 }

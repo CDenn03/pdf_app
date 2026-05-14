@@ -4,7 +4,7 @@ part 'relative_rect_model.freezed.dart';
 part 'relative_rect_model.g.dart';
 
 @freezed
-class RelativeRectModel with _$RelativeRectModel {
+abstract class RelativeRectModel with _$RelativeRectModel {
   const factory RelativeRectModel({
     required double top,
     required double left,

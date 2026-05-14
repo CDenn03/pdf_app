@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -5,8 +6,8 @@ import 'package:pdf_app/core/database/annotation_dao.dart';
 import 'package:pdf_app/core/models/annotation.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
 import 'package:pdf_app/core/models/relative_rect_model.dart';
-import 'package:pdf_app/core/utils/debounce.dart';
 import 'package:pdf_app/features/reader/state/annotation_notifier.dart';
+import 'package:pdf_app/features/reader/state/providers.dart';
 
 class MockAnnotationDao extends Mock implements AnnotationDao {}
 
@@ -20,14 +21,12 @@ void main() {
   });
 
   late MockAnnotationDao dao;
-  late AnnotationNotifier notifier;
+  late ProviderContainer container;
 
   setUp(() {
     dao = MockAnnotationDao();
-    notifier = AnnotationNotifier(
-      dao: dao,
-      debounce: Debounce(duration: const Duration(seconds: 60)),
-      // No onCanUndoChanged needed in tests — canUndo getter is sufficient.
+    container = ProviderContainer(
+      overrides: [annotationDaoProvider.overrideWithValue(dao)],
     );
 
     when(
@@ -37,7 +36,11 @@ void main() {
     when(() => dao.softDelete(any())).thenAnswer((_) async {});
   });
 
-  tearDown(() => notifier.dispose());
+  tearDown(() => container.dispose());
+
+  AnnotationNotifier notifier() =>
+      container.read(annotationNotifierProvider.notifier);
+  List<Annotation> state() => container.read(annotationNotifierProvider);
 
   group('loadForPage', () {
     test('loads annotations from dao and updates state', () async {
@@ -52,108 +55,108 @@ void main() {
         () => dao.getByPdfAndPageRange('pdf1', 1, 3),
       ).thenAnswer((_) async => [annotation]);
 
-      await notifier.loadForPage('pdf1', 2);
+      await notifier().loadForPage('pdf1', 2);
 
-      expect(notifier.state, [annotation]);
+      expect(state(), [annotation]);
     });
 
     test('clamps startPage to 1 when page is 1', () async {
-      await notifier.loadForPage('pdf1', 1);
+      await notifier().loadForPage('pdf1', 1);
       verify(() => dao.getByPdfAndPageRange('pdf1', 1, 2)).called(1);
     });
   });
 
   group('addHighlight', () {
     test('adds annotation to state immediately', () {
-      notifier.addHighlight(rect: _rect, page: 1);
-      expect(notifier.state.length, 1);
-      expect(notifier.state.first.type, AnnotationType.highlight);
-      expect(notifier.state.first.rect, _rect);
+      notifier().addHighlight(rect: _rect, page: 1);
+      expect(state().length, 1);
+      expect(state().first.type, AnnotationType.highlight);
+      expect(state().first.rect, _rect);
     });
 
     test('does not call dao.upsert immediately (debounced)', () {
-      notifier.addHighlight(rect: _rect, page: 1);
+      notifier().addHighlight(rect: _rect, page: 1);
       verifyNever(() => dao.upsert(any()));
     });
 
     test('canUndo becomes true after adding', () {
-      expect(notifier.canUndo, false);
-      notifier.addHighlight(rect: _rect, page: 1);
-      expect(notifier.canUndo, true);
+      expect(notifier().canUndo, false);
+      notifier().addHighlight(rect: _rect, page: 1);
+      expect(notifier().canUndo, true);
     });
   });
 
   group('addNote', () {
     test('adds note annotation with text', () {
-      notifier.addNote(rect: _rect, text: 'hello', page: 1);
-      expect(notifier.state.first.type, AnnotationType.note);
-      expect(notifier.state.first.text, 'hello');
+      notifier().addNote(rect: _rect, text: 'hello', page: 1);
+      expect(state().first.type, AnnotationType.note);
+      expect(state().first.text, 'hello');
     });
   });
 
   group('addBookmark', () {
     test('adds bookmark with no rect', () {
-      notifier.addBookmark(page: 3);
-      expect(notifier.state.first.type, AnnotationType.bookmark);
-      expect(notifier.state.first.rect, isNull);
+      notifier().addBookmark(page: 3);
+      expect(state().first.type, AnnotationType.bookmark);
+      expect(state().first.rect, isNull);
     });
   });
 
   group('removeAnnotation', () {
     test('removes from state and calls softDelete', () async {
-      notifier.addHighlight(rect: _rect, page: 1);
-      final id = notifier.state.first.id;
+      notifier().addHighlight(rect: _rect, page: 1);
+      final id = state().first.id;
 
-      await notifier.removeAnnotation(id);
+      await notifier().removeAnnotation(id);
 
-      expect(notifier.state, isEmpty);
+      expect(state(), isEmpty);
       verify(() => dao.softDelete(id)).called(1);
     });
   });
 
   group('undo', () {
     test('removes the most recently added annotation', () async {
-      notifier.addHighlight(rect: _rect, page: 1);
-      expect(notifier.state.length, 1);
+      notifier().addHighlight(rect: _rect, page: 1);
+      expect(state().length, 1);
 
-      final message = await notifier.undo();
+      final message = await notifier().undo();
 
-      expect(notifier.state, isEmpty);
+      expect(state(), isEmpty);
       expect(message, 'Highlight removed');
     });
 
     test('returns null when nothing to undo', () async {
-      final message = await notifier.undo();
+      final message = await notifier().undo();
       expect(message, isNull);
     });
 
     test('canUndo becomes false after undoing the only annotation', () async {
-      notifier.addHighlight(rect: _rect, page: 1);
-      await notifier.undo();
-      expect(notifier.canUndo, false);
+      notifier().addHighlight(rect: _rect, page: 1);
+      await notifier().undo();
+      expect(notifier().canUndo, false);
     });
 
     test('undoes in LIFO order', () async {
-      notifier.addHighlight(rect: _rect, page: 1);
-      notifier.addNote(rect: _rect, text: 'note', page: 1);
+      notifier().addHighlight(rect: _rect, page: 1);
+      notifier().addNote(rect: _rect, text: 'note', page: 1);
 
-      final msg1 = await notifier.undo();
+      final msg1 = await notifier().undo();
       expect(msg1, 'Note removed');
-      expect(notifier.state.length, 1);
-      expect(notifier.state.first.type, AnnotationType.highlight);
+      expect(state().length, 1);
+      expect(state().first.type, AnnotationType.highlight);
 
-      final msg2 = await notifier.undo();
+      final msg2 = await notifier().undo();
       expect(msg2, 'Highlight removed');
-      expect(notifier.state, isEmpty);
+      expect(state(), isEmpty);
     });
   });
 
   group('annotationsForPage', () {
     test('filters by page and excludes soft-deleted', () async {
-      notifier.addHighlight(rect: _rect, page: 1);
-      notifier.addHighlight(rect: _rect, page: 2);
+      notifier().addHighlight(rect: _rect, page: 1);
+      notifier().addHighlight(rect: _rect, page: 2);
 
-      final page1 = notifier.annotationsForPage(1);
+      final page1 = notifier().annotationsForPage(1);
       expect(page1.length, 1);
       expect(page1.first.page, 1);
     });
@@ -161,12 +164,12 @@ void main() {
 
   group('updateNoteText', () {
     test('updates text of existing note', () {
-      notifier.addNote(rect: _rect, text: 'original', page: 1);
-      final id = notifier.state.first.id;
+      notifier().addNote(rect: _rect, text: 'original', page: 1);
+      final id = state().first.id;
 
-      notifier.updateNoteText(id, 'updated');
+      notifier().updateNoteText(id, 'updated');
 
-      expect(notifier.state.first.text, 'updated');
+      expect(state().first.text, 'updated');
     });
   });
 }

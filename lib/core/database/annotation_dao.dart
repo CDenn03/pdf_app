@@ -92,6 +92,7 @@ class AnnotationDao {
       'rect_bottom': annotation.rect?.bottom,
       'rect_right': annotation.rect?.right,
       'text': annotation.text,
+      'label': annotation.label,
       'color': annotation.color.name,
       'is_deleted': annotation.isDeleted ? 1 : 0,
       'updated_at': _now,
@@ -125,6 +126,7 @@ class AnnotationDao {
       type: AnnotationType.values.byName(map['type'] as String),
       rect: rect,
       text: map['text'] as String?,
+      label: map['label'] as String?,
       color: color,
       isDeleted: (map['is_deleted'] as int) == 1,
     );

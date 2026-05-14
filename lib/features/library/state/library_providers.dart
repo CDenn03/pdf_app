@@ -13,31 +13,32 @@ import 'package:pdf_app/features/library/state/library_entry.dart';
 import 'package:pdf_app/features/reader/state/providers.dart';
 
 // ---------------------------------------------------------------------------
-// Library state — manually added files only
+// Library notifier — manually curated files
 // ---------------------------------------------------------------------------
 
 /// Manages the user's personal library: files they have explicitly added.
 ///
 /// Persisted across restarts via [LibraryPersistence].
-/// Never auto-populates from device scan — that is the Device tab's job.
-class LibraryNotifier extends StateNotifier<List<LibraryEntry>> {
-  final FileChecker _fileChecker;
-  final LibraryPersistence _persistence;
+class LibraryNotifier extends Notifier<List<LibraryEntry>> {
+  late final FileChecker _fileChecker;
+  late final LibraryPersistence _persistence;
 
-  LibraryNotifier(this._fileChecker, this._persistence) : super([]) {
+  @override
+  List<LibraryEntry> build() {
+    _fileChecker = ref.read(fileServiceProvider);
+    _persistence = ref.read(libraryPersistenceProvider);
     _init();
+    return [];
   }
 
   Future<void> _init() async {
     final persisted = await _persistence.loadEntries();
 
     if (persisted.isEmpty) {
-      // First launch — seed with the bundled sample.
       await _addSample();
       return;
     }
 
-    // Restore persisted entries and re-check file status.
     final restored = await Future.wait(
       persisted.map((e) async {
         final status = await _fileChecker.checkFile(e.path);
@@ -128,19 +129,22 @@ class LibraryNotifier extends StateNotifier<List<LibraryEntry>> {
 }
 
 // ---------------------------------------------------------------------------
-// Device files state — all PDFs found on device
+// Device files notifier — all PDFs found on device
 // ---------------------------------------------------------------------------
 
 /// Manages the list of all PDF files found on the device via storage scan.
 ///
-/// This is separate from the library — it shows everything, not just what
-/// the user has curated. Not persisted (re-scanned on each app start).
-class DeviceFilesNotifier extends StateNotifier<List<LibraryEntry>> {
-  final FileChecker _fileChecker;
-  final PdfScanner _scanner;
+/// Not persisted — re-scanned on each app start.
+class DeviceFilesNotifier extends Notifier<List<LibraryEntry>> {
+  late final FileChecker _fileChecker;
+  late final PdfScanner _scanner;
 
-  DeviceFilesNotifier(this._fileChecker, this._scanner) : super([]) {
+  @override
+  List<LibraryEntry> build() {
+    _fileChecker = ref.read(fileServiceProvider);
+    _scanner = ref.read(pdfScannerProvider);
     scan();
+    return [];
   }
 
   Future<void> scan() async {
@@ -150,7 +154,7 @@ class DeviceFilesNotifier extends StateNotifier<List<LibraryEntry>> {
         paths.map((path) async {
           final status = await _fileChecker.checkFile(path);
           return LibraryEntry(
-            id: path, // path is stable enough as an id here
+            id: path,
             name: p.basename(path),
             path: path,
             status: status,
@@ -171,14 +175,17 @@ class DeviceFilesNotifier extends StateNotifier<List<LibraryEntry>> {
 }
 
 // ---------------------------------------------------------------------------
-// Collections state
+// Collections notifier
 // ---------------------------------------------------------------------------
 
-class CollectionsNotifier extends StateNotifier<List<PdfCollection>> {
-  final CollectionsService _service;
+class CollectionsNotifier extends Notifier<List<PdfCollection>> {
+  late final CollectionsService _service;
 
-  CollectionsNotifier(this._service) : super([]) {
+  @override
+  List<PdfCollection> build() {
+    _service = ref.read(collectionsServiceProvider);
     _load();
+    return [];
   }
 
   Future<void> _load() async {
@@ -220,22 +227,14 @@ final pdfScannerProvider = Provider<PdfScanner>((ref) {
 });
 
 final libraryEntriesProvider =
-    StateNotifierProvider<LibraryNotifier, List<LibraryEntry>>((ref) {
-      return LibraryNotifier(
-        ref.watch(fileServiceProvider),
-        ref.watch(libraryPersistenceProvider),
-      );
-    });
+    NotifierProvider<LibraryNotifier, List<LibraryEntry>>(LibraryNotifier.new);
 
 final deviceFilesProvider =
-    StateNotifierProvider<DeviceFilesNotifier, List<LibraryEntry>>((ref) {
-      return DeviceFilesNotifier(
-        ref.watch(fileServiceProvider),
-        ref.watch(pdfScannerProvider),
-      );
-    });
+    NotifierProvider<DeviceFilesNotifier, List<LibraryEntry>>(
+      DeviceFilesNotifier.new,
+    );
 
 final collectionsProvider =
-    StateNotifierProvider<CollectionsNotifier, List<PdfCollection>>((ref) {
-      return CollectionsNotifier(ref.watch(collectionsServiceProvider));
-    });
+    NotifierProvider<CollectionsNotifier, List<PdfCollection>>(
+      CollectionsNotifier.new,
+    );

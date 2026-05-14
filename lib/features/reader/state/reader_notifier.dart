@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:pdf_app/core/providers.dart';
 import 'package:pdf_app/core/services/reading_progress_service.dart';
 import 'package:pdf_app/features/reader/state/reader_state.dart';
 
@@ -9,12 +10,14 @@ import 'package:pdf_app/features/reader/state/reader_state.dart';
 ///
 /// Intentionally separate from [AnnotationNotifier] to prevent rebuild
 /// storms — reader and annotation state must never be merged.
-class ReaderNotifier extends StateNotifier<ReaderState> {
-  final ReadingProgressStore _progressStore;
+class ReaderNotifier extends Notifier<ReaderState> {
+  late final ReadingProgressStore _progressStore;
 
-  ReaderNotifier({required ReadingProgressStore progressStore})
-    : _progressStore = progressStore,
-      super(const ReaderState());
+  @override
+  ReaderState build() {
+    _progressStore = ref.read(readingProgressProvider);
+    return const ReaderState();
+  }
 
   /// Called when a PDF document is loaded.
   ///

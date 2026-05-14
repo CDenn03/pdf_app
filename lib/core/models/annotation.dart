@@ -13,8 +13,11 @@ part 'annotation.g.dart';
 /// bookmarks have no spatial extent. Text is nullable because highlights
 /// and bookmarks carry no text content. Soft-deleted annotations are
 /// retained in the database with [isDeleted] set to true.
+///
+/// [label] is an optional user-defined name, used primarily for bookmarks
+/// so they can be identified in the annotations panel.
 @freezed
-class Annotation with _$Annotation {
+abstract class Annotation with _$Annotation {
   const factory Annotation({
     required String id,
     required String pdfId,
@@ -22,6 +25,7 @@ class Annotation with _$Annotation {
     required AnnotationType type,
     RelativeRectModel? rect,
     String? text,
+    String? label,
     @Default(AnnotationColor.yellow) AnnotationColor color,
     @Default(false) bool isDeleted,
   }) = _Annotation;
