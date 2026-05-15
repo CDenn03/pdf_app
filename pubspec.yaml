@@ -13,7 +13,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   
   # Strict Constraints
-  syncfusion_flutter_pdfviewer: ^33.2.3
+  pdfrx: ^2.4.0
   flutter_riverpod: ^3.3.1
   go_router: ^17.2.3
   sqflite: ^2.3.3

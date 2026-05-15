@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart' show PdfDocument;
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:pdfrx/pdfrx.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart' as sf_pdf;
 
 import 'package:pdf_app/core/constants.dart';
 import 'package:pdf_app/core/models/annotation.dart' as app;
@@ -14,6 +14,7 @@ import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
 import 'package:pdf_app/core/theme/reading_mode.dart';
 import 'package:pdf_app/core/theme/scroll_direction.dart';
+import 'package:pdf_app/core/utils/coordinate_mapper.dart';
 import 'package:pdf_app/features/library/state/library_providers.dart';
 import 'package:pdf_app/features/reader/presentation/annotation_panel.dart';
 import 'package:pdf_app/features/reader/presentation/annotation_toolbar.dart';
@@ -26,24 +27,10 @@ import 'package:pdf_app/features/reader/state/providers.dart';
 
 /// The immersive PDF reader page.
 ///
-/// ## Why bars live in Scaffold slots, not inside the body Stack
-///
-/// [SfPdfViewer] renders as a PlatformView on Android/iOS. PlatformViews
-/// swallow all touch events at the OS level before Flutter's gesture arena
-/// sees them. Any [GestureDetector] or [Listener] placed *inside* the same
-/// Stack as the viewer will never receive taps or drags over the PDF area.
-///
-/// Solution: the top bar and bottom action bar are placed in
-/// [Scaffold.appBar] and [Scaffold.bottomNavigationBar] respectively.
-/// These slots are laid out *outside* the PlatformView's bounds by the
-/// Scaffold, so they always receive input correctly. They animate their
-/// opacity to show/hide without leaving the widget tree.
-///
-/// The [GestureHandler] for annotations is placed *above* the viewer in
-/// the body Stack. It works because in annotation mode we set
-/// [SfPdfViewer]'s `interactionMode` to `none`, which disables the
-/// PlatformView's own touch handling and lets Flutter's gesture arena
-/// take over.
+/// Uses [PdfViewer] from pdfrx, which renders each page as a Flutter widget.
+/// This means annotation overlays placed via [PdfViewerParams.pageOverlaysBuilder]
+/// are children of each page widget and scroll with the content — fixing the
+/// highlight drift problem that existed with the PlatformView-based SfPdfViewer.
 class ReaderPage extends ConsumerStatefulWidget {
   final String pdfPath;
 
@@ -56,10 +43,10 @@ class ReaderPage extends ConsumerStatefulWidget {
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   late final PdfViewerController _pdfController;
 
-  Size _pageSize = Size.zero;
   int _currentPage = 1;
   int _totalPages = 1;
-  PdfDocument? _pdfDocument;
+  sf_pdf.PdfDocument?
+  _sfDocument; // syncfusion_flutter_pdf doc for TOC extraction
 
   // UI chrome visibility.
   bool _barsVisible = true;
@@ -81,13 +68,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool get _isAsset =>
       !widget.pdfPath.startsWith('/') && !widget.pdfPath.contains('://');
 
-  bool get _pageReady => _pageSize != Size.zero;
-
   @override
   void initState() {
     super.initState();
     _pdfController = PdfViewerController();
-    // Start with bars visible so the user knows they exist.
     _scheduleAutoHide();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(libraryEntriesProvider.notifier).recordOpened(widget.pdfPath);
@@ -97,7 +81,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   @override
   void dispose() {
     _autoHideTimer?.cancel();
-    _pdfController.dispose();
+    // PdfViewerController does not have a dispose method in pdfrx.
     super.dispose();
   }
 
@@ -105,38 +89,56 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // Document lifecycle
   // ---------------------------------------------------------------------------
 
-  void _onDocumentLoaded(PdfDocumentLoadedDetails details) {
-    final size = details.document.pages[0].size;
-    final total = details.document.pages.count;
+  /// Called by [PdfViewerParams.onViewerReady] once pdfrx has loaded the doc.
+  void _onViewerReady(PdfDocument doc, PdfViewerController controller) async {
+    final total = doc.pages.length;
+    setState(() => _totalPages = total);
 
-    setState(() {
-      _pageSize = Size(size.width, size.height);
-      _totalPages = total;
-      _pdfDocument = details.document;
-    });
-
-    ref
+    await ref
         .read(readerNotifierProvider.notifier)
-        .onDocumentLoaded(pdfId: widget.pdfPath, totalPages: total)
-        .then((_) {
-          final resumePage = ref.read(readerNotifierProvider).resumePage;
-          if (resumePage > 1) _pdfController.jumpToPage(resumePage);
-        });
+        .onDocumentLoaded(pdfId: widget.pdfPath, totalPages: total);
+
+    final resumePage = ref.read(readerNotifierProvider).resumePage;
+    if (resumePage > 1 && mounted) {
+      await _pdfController.goToPage(pageNumber: resumePage);
+    }
 
     ref
         .read(annotationNotifierProvider.notifier)
         .loadForPage(widget.pdfPath, _currentPage);
+
+    // Load the Syncfusion PDF document for TOC extraction (parser only).
+    _loadSfDocument();
   }
 
-  void _onDocumentLoadFailed(PdfDocumentLoadFailedDetails details) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to load PDF: ${details.error}')),
-    );
+  Future<void> _loadSfDocument() async {
+    try {
+      if (_isAsset) {
+        final bytes = await DefaultAssetBundle.of(
+          // ignore: use_build_context_synchronously
+          context,
+        ).load(widget.pdfPath);
+        if (mounted) {
+          setState(() {
+            _sfDocument = sf_pdf.PdfDocument(
+              inputBytes: bytes.buffer.asUint8List(),
+            );
+          });
+        }
+      } else {
+        final bytes = await File(widget.pdfPath).readAsBytes();
+        if (mounted) {
+          setState(() => _sfDocument = sf_pdf.PdfDocument(inputBytes: bytes));
+        }
+      }
+    } catch (_) {
+      // TOC extraction is best-effort — failure is non-fatal.
+    }
   }
 
-  void _onPageChanged(PdfPageChangedDetails details) {
-    final page = details.newPageNumber;
+  /// Called by [PdfViewerParams.onPageChanged].
+  void _onPageChanged(int? page) {
+    if (page == null) return;
     setState(() {
       _currentPage = page;
       _updateBookmarkState();
@@ -251,7 +253,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           _BookmarkLabelDialog(defaultLabel: 'Page $_currentPage'),
     );
     // null = cancelled, empty string = use default
-    if (label == null) return; // user cancelled
+    if (label == null) return; // user cancelledtr
     ref
         .read(annotationNotifierProvider.notifier)
         .addBookmark(
@@ -282,7 +284,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       builder: (context) =>
           _JumpToPageDialog(controller: controller, totalPages: _totalPages),
     );
-    if (page != null) _pdfController.jumpToPage(page);
+    if (page != null) await _pdfController.goToPage(pageNumber: page);
     if (mounted) _scheduleAutoHide();
   }
 
@@ -303,7 +305,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     showTocPanel(
       context: context,
       pdfController: _pdfController,
-      document: _pdfDocument,
+      document: _sfDocument,
     ).then((_) => _showBars());
   }
 
@@ -312,7 +314,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     showAnnotationPanel(
       context: context,
       pdfId: widget.pdfPath,
-      onNavigate: (page) => _pdfController.jumpToPage(page),
+      onNavigate: (page) => _pdfController.goToPage(pageNumber: page),
     ).then((_) => _showBars());
   }
 
@@ -348,17 +350,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // Build
   // ---------------------------------------------------------------------------
 
-  List<app.Annotation> _visibleAnnotations(List<app.Annotation> all) =>
-      all.where((a) => a.page == _currentPage && !a.isDeleted).toList();
-
   @override
   Widget build(BuildContext context) {
-    final annotations = ref.watch(annotationNotifierProvider);
-    final visible = _visibleAnnotations(annotations);
+    // Watch annotations so the overlay rebuilds when they change.
+    ref.watch(annotationNotifierProvider);
 
-    // bottomNavigationBar is set to null when hidden so Scaffold reclaims
-    // the space entirely — an invisible-but-present bar still occupies height.
-    // The annotation toolbar is always shown when annotating (no auto-hide).
     final Widget? bottomBar;
     if (_annotating) {
       bottomBar = AnnotationToolbar(
@@ -398,67 +394,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               )
             : null,
         bottomNavigationBar: bottomBar,
-        body: _buildBody(visible),
+        body: _buildBody(),
       ),
     );
   }
 
-  Widget _buildBody(List<app.Annotation> visibleAnnotations) {
+  Widget _buildBody() {
     return Stack(
       children: [
-        // Layer 1: PDF viewer, wrapped in a color filter for reading mode.
-        // _ScrollAmplifier is only active in paginated mode — in continuous
-        // mode SfPdfViewer handles its own scroll physics natively.
-        _ScrollAmplifier(
-          controller: _pdfController,
-          enabled:
-              !_annotating && _scrollDirection == ScrollDirection.paginated,
-          child: _ReadingModeFilter(mode: _readingMode, child: _buildViewer()),
+        // Layer 1: PDF viewer with reading mode filter.
+        // pdfrx renders pages as Flutter widgets — no PlatformView.
+        _ReadingModeFilter(mode: _readingMode, child: _buildViewer()),
+
+        // Layer 2: Page indicator pill.
+        Positioned(
+          bottom: 16,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: _PageIndicator(
+              currentPage: _currentPage,
+              totalPages: _totalPages,
+              onTap: _showJumpToPageDialog,
+            ),
+          ),
         ),
 
-        // Layer 2: Annotation gesture capture.
-        // Only active in annotation mode. SfPdfViewer's interactionMode is
-        // set to PdfInteractionMode.none in that state, which disables the
-        // PlatformView's touch handling and lets this GestureDetector win.
-        if (_pageReady && _annotating)
-          Positioned.fill(
-            child: GestureHandler(
-              pageSize: _pageSize,
-              currentPage: _currentPage,
-              pdfId: widget.pdfPath,
-              activeTool: _activeTool,
-            ),
-          ),
-
-        // Layer 3: Annotation overlays.
-        // Notes get a tap-through layer so tapping a note anchor shows
-        // the note text in a non-invasive tooltip.
-        // Highlights and bookmarks are purely visual (IgnorePointer).
-        if (_pageReady && visibleAnnotations.isNotEmpty)
-          Positioned.fill(
-            child: _AnnotationOverlay(
-              annotations: visibleAnnotations,
-              pageSize: _pageSize,
-            ),
-          ),
-
-        // Layer 4: Page indicator pill.
-        if (_pageReady)
-          Positioned(
-            bottom: 16,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: _PageIndicator(
-                currentPage: _currentPage,
-                totalPages: _totalPages,
-                onTap: _showJumpToPageDialog,
-              ),
-            ),
-          ),
-
-        // Layer 5: Side scroll thumb — right edge, always visible.
-        if (_pageReady && _totalPages > 1)
+        // Layer 3: Side scroll thumb.
+        if (_totalPages > 1)
           Positioned(
             right: 0,
             top: 0,
@@ -466,7 +429,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             child: _SideScrollThumb(
               currentPage: _currentPage,
               totalPages: _totalPages,
-              onPageRequested: (page) => _pdfController.jumpToPage(page),
+              onPageRequested: (page) =>
+                  _pdfController.goToPage(pageNumber: page),
             ),
           ),
       ],
@@ -474,48 +438,119 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Widget _buildViewer() {
-    // In annotation mode use pan mode — this disables the viewer's text
-    // selection gesture recognizer so the GestureHandler above it can
-    // receive drag events uncontested.
-    final interactionMode = _annotating
-        ? PdfInteractionMode.pan
-        : PdfInteractionMode.selection;
+    // Continuous = vertical scroll through all pages (default pdfrx layout).
+    // Paginated = horizontal swipe, one page at a time via custom layoutPages.
+    final bool isPaginated = _scrollDirection == ScrollDirection.paginated;
 
-    // Paginated = single page, swipe left/right.
-    // Continuous = all pages in a vertical scroll.
-    final layoutMode = _scrollDirection == ScrollDirection.continuous
-        ? PdfPageLayoutMode.continuous
-        : PdfPageLayoutMode.single;
+    final params = PdfViewerParams(
+      // For paginated mode, lay pages out horizontally side by side.
+      // For continuous mode, use the default vertical layout (null = default).
+      layoutPages: isPaginated ? _horizontalPageLayout : null,
+      margin: 8,
+      onViewerReady: _onViewerReady,
+      onPageChanged: _onPageChanged,
+      // onGeneralTap must return bool: true = handled, false = pass through.
+      onGeneralTap: (context, controller, details) {
+        _toggleBars();
+        return false; // let the viewer also process the tap (e.g. links)
+      },
+      textSelectionParams: PdfTextSelectionParams(enabled: !_annotating),
+      pageOverlaysBuilder: (context, pageRectInViewer, page) {
+        return [_buildPageOverlay(context, pageRectInViewer, page)];
+      },
+    );
 
     if (_isAsset) {
-      return SfPdfViewer.asset(
+      return PdfViewer.asset(
         widget.pdfPath,
         controller: _pdfController,
-        interactionMode: interactionMode,
-        pageLayoutMode: layoutMode,
-        pageSpacing: 4,
-        onDocumentLoaded: _onDocumentLoaded,
-        onDocumentLoadFailed: _onDocumentLoadFailed,
-        onPageChanged: _onPageChanged,
-        onTap: (_) => _toggleBars(),
-        canShowScrollHead: false,
-        canShowScrollStatus: false,
-        canShowPaginationDialog: false,
+        params: params,
       );
     }
-    return SfPdfViewer.file(
-      File(widget.pdfPath),
+    return PdfViewer.file(
+      widget.pdfPath,
       controller: _pdfController,
-      interactionMode: interactionMode,
-      pageLayoutMode: layoutMode,
-      pageSpacing: 4,
-      onDocumentLoaded: _onDocumentLoaded,
-      onDocumentLoadFailed: _onDocumentLoadFailed,
-      onPageChanged: _onPageChanged,
-      onTap: (_) => _toggleBars(),
-      canShowScrollHead: false,
-      canShowScrollStatus: false,
-      canShowPaginationDialog: false,
+      params: params,
+    );
+  }
+
+  /// Lays out pages horizontally for paginated (swipe left/right) mode.
+  static PdfPageLayout _horizontalPageLayout(
+    List<PdfPage> pages,
+    PdfViewerParams params,
+  ) {
+    final margin = params.margin;
+    final maxH =
+        pages.fold(0.0, (h, p) => h > p.height ? h : p.height) + margin * 2;
+    final rects = <Rect>[];
+    var x = margin;
+    for (final page in pages) {
+      rects.add(
+        Rect.fromLTWH(x, (maxH - page.height) / 2, page.width, page.height),
+      );
+      x += page.width + margin;
+    }
+    return PdfPageLayout(pageLayouts: rects, documentSize: Size(x, maxH));
+  }
+
+  /// Builds the annotation overlay for a single page.
+  ///
+  /// [pageRectInViewer] is the page's Rect in the viewer's coordinate space.
+  /// [page] is the pdfrx PdfPage with width/height in PDF points.
+  ///
+  /// The overlay is sized to [pageRectInViewer.size] so coordinate mapping
+  /// via [toAbsolute] / [toRelative] is exact — the rendered pixel size
+  /// matches what the user sees.
+  Widget _buildPageOverlay(
+    BuildContext context,
+    Rect pageRectInViewer,
+    PdfPage page,
+  ) {
+    final pageSize = pageRectInViewer.size;
+    final pageNumber = page.pageNumber;
+    final annotations = ref
+        .read(annotationNotifierProvider)
+        .where((a) => a.page == pageNumber && !a.isDeleted)
+        .toList();
+
+    final notes = annotations
+        .where((a) => a.type == AnnotationType.note && a.rect != null)
+        .toList();
+
+    return SizedBox(
+      width: pageSize.width,
+      height: pageSize.height,
+      child: Stack(
+        children: [
+          // Highlight + note anchor paint — non-interactive.
+          if (annotations.isNotEmpty)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: HighlightPainter(
+                    annotations: annotations,
+                    pageSize: pageSize,
+                  ),
+                ),
+              ),
+            ),
+
+          // Note tap targets — tapping shows the note text.
+          for (final note in notes)
+            _NoteTapTarget(annotation: note, pageSize: pageSize),
+
+          // Gesture handler — only present in annotation mode.
+          if (_annotating)
+            Positioned.fill(
+              child: GestureHandler(
+                pageSize: pageSize,
+                currentPage: pageNumber,
+                pdfId: widget.pdfPath,
+                activeTool: _activeTool,
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -527,45 +562,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 }
 
 // ---------------------------------------------------------------------------
-// Annotation overlay — highlights (non-interactive) + note tap targets
+// Annotation overlay helpers (note tap targets + tooltip)
 // ---------------------------------------------------------------------------
-
-/// Renders annotation overlays and handles taps on note anchors.
-///
-/// Highlights and bookmarks are wrapped in [IgnorePointer] so touches
-/// pass through to the PDF viewer. Note anchors are tappable — a tap
-/// shows the note text in a non-invasive bottom tooltip.
-class _AnnotationOverlay extends StatelessWidget {
-  const _AnnotationOverlay({required this.annotations, required this.pageSize});
-
-  final List<app.Annotation> annotations;
-  final Size pageSize;
-
-  @override
-  Widget build(BuildContext context) {
-    final notes = annotations
-        .where((a) => a.type == AnnotationType.note && a.rect != null)
-        .toList();
-
-    return Stack(
-      children: [
-        // Non-interactive paint layer for highlights + note anchors.
-        IgnorePointer(
-          child: CustomPaint(
-            painter: HighlightPainter(
-              annotations: annotations,
-              pageSize: pageSize,
-            ),
-            child: const SizedBox.expand(),
-          ),
-        ),
-        // Tap targets for notes — positioned over each note anchor.
-        for (final note in notes)
-          _NoteTapTarget(annotation: note, pageSize: pageSize),
-      ],
-    );
-  }
-}
 
 /// A transparent tap target positioned over a note anchor circle.
 ///
@@ -801,25 +799,17 @@ class _ActionButton extends StatelessWidget {
 // Reading mode color filter
 // ---------------------------------------------------------------------------
 
-/// Applies a color filter to the PDF viewer to implement reading modes.
+/// Wraps the PDF viewer in a [ColorFilter] to implement reading modes.
 ///
-/// [SfPdfViewer] is a PlatformView — its internal background cannot be
-/// changed via Flutter properties. A [ColorFiltered] widget is the only
-/// way to affect its rendered output.
-///
-/// - Light: no filter (pass-through)
-/// - Dark: invert colors then rotate hue 180° to restore natural hues
-///   (standard "dark mode PDF" technique — text becomes white, background
-///   becomes dark, images look natural)
-/// - Sepia: warm matrix that shifts whites toward amber and blacks toward
-///   dark brown
+/// - Light: no filter
+/// - Dark: invert + hue-rotate so text becomes white and images look natural
+/// - Sepia: warm amber matrix
 class _ReadingModeFilter extends StatelessWidget {
   const _ReadingModeFilter({required this.mode, required this.child});
 
   final ReadingMode mode;
   final Widget child;
 
-  // Standard invert + hue-rotate matrix for dark mode.
   static const _darkMatrix = ColorFilter.matrix(<double>[
     -1,
     0,
@@ -843,7 +833,6 @@ class _ReadingModeFilter extends StatelessWidget {
     0,
   ]);
 
-  // Sepia matrix: warm amber tones.
   static const _sepiaMatrix = ColorFilter.matrix(<double>[
     0.393,
     0.769,
@@ -868,77 +857,11 @@ class _ReadingModeFilter extends StatelessWidget {
   ]);
 
   @override
-  Widget build(BuildContext context) {
-    return switch (mode) {
-      ReadingMode.light => child,
-      ReadingMode.dark => ColorFiltered(colorFilter: _darkMatrix, child: child),
-      ReadingMode.sepia => ColorFiltered(
-        colorFilter: _sepiaMatrix,
-        child: child,
-      ),
-    };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Scroll amplifier
-// ---------------------------------------------------------------------------
-
-class _ScrollAmplifier extends StatefulWidget {
-  const _ScrollAmplifier({
-    required this.controller,
-    required this.enabled,
-    required this.child,
-  });
-
-  final PdfViewerController controller;
-  final bool enabled;
-  final Widget child;
-
-  static const double amplification = 0.05;
-
-  @override
-  State<_ScrollAmplifier> createState() => _ScrollAmplifierState();
-}
-
-class _ScrollAmplifierState extends State<_ScrollAmplifier> {
-  int? _activePointer;
-  double _lastY = 0;
-
-  void _onPointerDown(PointerDownEvent e) {
-    _activePointer = e.pointer;
-    _lastY = e.position.dy;
-  }
-
-  void _onPointerMove(PointerMoveEvent e) {
-    if (!widget.enabled || e.pointer != _activePointer) return;
-    final dy = e.position.dy - _lastY;
-    _lastY = e.position.dy;
-    if (dy == 0) return;
-    final extra = -dy * _ScrollAmplifier.amplification;
-    final current = widget.controller.scrollOffset;
-    widget.controller.jumpTo(xOffset: current.dx, yOffset: current.dy + extra);
-  }
-
-  void _onPointerUp(PointerUpEvent e) {
-    if (e.pointer == _activePointer) _activePointer = null;
-  }
-
-  void _onPointerCancel(PointerCancelEvent e) {
-    if (e.pointer == _activePointer) _activePointer = null;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: _onPointerDown,
-      onPointerMove: _onPointerMove,
-      onPointerUp: _onPointerUp,
-      onPointerCancel: _onPointerCancel,
-      child: widget.child,
-    );
-  }
+  Widget build(BuildContext context) => switch (mode) {
+    ReadingMode.light => child,
+    ReadingMode.dark => ColorFiltered(colorFilter: _darkMatrix, child: child),
+    ReadingMode.sepia => ColorFiltered(colorFilter: _sepiaMatrix, child: child),
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 import 'package:pdf_app/shared/widgets/overlay_panel.dart';
 
@@ -29,71 +27,75 @@ class _SearchPanelContent extends StatefulWidget {
 class _SearchPanelContentState extends State<_SearchPanelContent> {
   final _queryController = TextEditingController();
   final _focusNode = FocusNode();
-  PdfTextSearchResult? _result;
+
+  PdfTextSearcher? _searcher;
+  int _matchCount = 0;
+  int _currentMatch = 0;
   bool _searching = false;
-  Timer? _debounce;
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _queryController.dispose();
     _focusNode.dispose();
-    _result?.clear();
+    _searcher?.dispose();
     super.dispose();
   }
 
-  void _onQueryChanged(String query) {
-    // Debounce: wait 400ms after the user stops typing before searching.
-    _debounce?.cancel();
+  Future<void> _search(String query) async {
     if (query.trim().isEmpty) {
-      _result?.clear();
-      setState(() => _result = null);
+      _searcher?.dispose();
+      setState(() {
+        _searcher = null;
+        _matchCount = 0;
+        _currentMatch = 0;
+        _searching = false;
+      });
       return;
     }
-    _debounce = Timer(const Duration(milliseconds: 400), () => _search(query));
-  }
 
-  void _search(String query) {
-    if (query.trim().isEmpty) return;
-    _result?.clear();
     setState(() => _searching = true);
 
-    // searchText is synchronous — it returns a result object that updates
-    // asynchronously as the viewer finds matches.
-    final result = widget.pdfController.searchText(query.trim());
+    _searcher?.dispose();
+    final searcher = PdfTextSearcher(widget.pdfController);
+    _searcher = searcher;
 
-    // Listen for the result to populate, then jump to the first match.
-    result.addListener(() {
+    searcher.addListener(() {
       if (!mounted) return;
       setState(() {
-        _result = result;
-        _searching = false;
+        _matchCount = searcher.matches.length;
+        _currentMatch = (searcher.currentIndex ?? -1) + 1;
+        _searching = searcher.isSearching;
       });
     });
 
-    setState(() {
-      _result = result;
-      _searching = false;
-    });
+    searcher.startTextSearch(query.trim());
+    if (mounted) setState(() => _searching = false);
   }
 
   void _submit() {
-    // Dismiss keyboard, then search.
     _focusNode.unfocus();
-    _debounce?.cancel();
     _search(_queryController.text);
   }
 
-  void _previous() => _result?.previousInstance();
-  void _next() => _result?.nextInstance();
+  void _previous() async {
+    await _searcher?.goToPrevMatch();
+    if (mounted) {
+      setState(() => _currentMatch = (_searcher?.currentIndex ?? -1) + 1);
+    }
+  }
+
+  void _next() async {
+    await _searcher?.goToNextMatch();
+    if (mounted) {
+      setState(() => _currentMatch = (_searcher?.currentIndex ?? -1) + 1);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final result = _result;
-    final hasResults = result != null && result.totalInstanceCount > 0;
-    final noResults =
-        result != null && result.totalInstanceCount == 0 && !_searching;
+    final hasResults = _matchCount > 0;
+    final noResults = _searcher != null && _matchCount == 0 && !_searching;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -129,16 +131,12 @@ class _SearchPanelContentState extends State<_SearchPanelContent> {
                             icon: const Icon(Icons.clear, size: 18),
                             onPressed: () {
                               _queryController.clear();
-                              _result?.clear();
-                              setState(() => _result = null);
+                              _search('');
                             },
                           )
                         : null,
                   ),
-                  onChanged: (v) {
-                    setState(() {}); // rebuild for suffix icon
-                    _onQueryChanged(v);
-                  },
+                  onChanged: (_) => setState(() {}), // rebuild suffix icon
                   onSubmitted: (_) => _submit(),
                 ),
               ),
@@ -168,8 +166,7 @@ class _SearchPanelContentState extends State<_SearchPanelContent> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${result.currentInstanceIndex} of '
-                  '${result.totalInstanceCount} results',
+                  '$_currentMatch of $_matchCount results',
                   style: theme.textTheme.bodySmall,
                 ),
                 Row(
