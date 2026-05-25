@@ -1,0 +1,770 @@
+================================================================================
+FULL ANNOTATION SYSTEM AUDIT
+pdf_app — syncfusion_flutter_pdfviewer ^33.2.3
+Date: 2026-05-25
+================================================================================
+
+CRITICAL DISCOVERY: WRONG LIBRARY
+--------------------------------------------------------------------------------
+The task prompt referenced pdfrx: ^2.4.0.
+The actual pubspec.yaml uses:
+
+  syncfusion_flutter_pdfviewer: ^33.2.3
+  syncfusion_flutter_pdf: ^33.2.6
+
+Every diagnosis and recommendation in this document is specific to SfPdfViewer.
+The distinction is significant: pdfrx exposes raw glyph geometry and character
+indices. SfPdfViewer abstracts all of that away behind a PlatformView.
+
+
+================================================================================
+ROOT CAUSE ANALYSIS
+================================================================================
+
+PROBLEM 1: Highlights misalign and disappear in paginated mode
+--------------------------------------------------------------------------------
+Root cause: coordinate space mismatch — two independent spaces are being
+confused as one.
+
+In _ReaderPageState._onDocumentLoaded (reader_page.dart:109):
+
+  final size = details.document.pages[0].size;
+  setState(() {
+    _pageSize = Size(size.width, size.height);
+
+details.document.pages[0].size returns the PDF LOGICAL page size — PDF
+user-space units (typically 1 point = 1/72 inch), e.g. 612x792 for A4.
+This is a document-space measurement with no relationship to screen pixels.
+
+SfPdfViewer then applies its own internal render transform to fill the viewport:
+
+  PDF user-space (612x792) -> render pixels (390x504 on a 390px-wide phone)
+
+The scale factor is approximately:
+  scale = (screenWidth - margins) / pdfWidth
+
+SfPdfViewer never exposes this scale factor.
+
+In GestureHandler._onDragEnd (gesture_handler.dart:60-67):
+
+  final rect = Rect.fromPoints(start, end);
+  ref.read(annotationNotifierProvider.notifier).addHighlight(
+    rect: toRelative(rect, widget.pageSize),
+    ...
+  );
+
+start and end are localPosition from DragStartDetails/DragUpdateDetails —
+these are Flutter SCREEN PIXELS, relative to the GestureHandler widget's
+top-left. widget.pageSize is the PDF logical size (612x792).
+
+So toRelative divides screen pixels by PDF points (coordinate_mapper.dart:24-31):
+
+  RelativeRectModel(
+    left: absoluteRect.left / pageSize.width,   // screenPx / pdfPoints — WRONG
+    top:  absoluteRect.top  / pageSize.height,  // screenPx / pdfPoints — WRONG
+    ...
+  )
+
+The relative values produced are wrong by a factor of approximately 1.6x on a
+typical phone (612 PDF pts vs ~390 screen px).
+
+Then HighlightPainter renders (highlight_painter.dart:41-47):
+
+  final absoluteRect = toAbsolute(rect, pageSize);
+  canvas.drawRect(absoluteRect, paint);
+
+The canvas size in paint(Canvas, Size) is the actual SCREEN size of the
+CustomPaint widget (SizedBox.expand() — full viewport). But pageSize (passed in)
+is again the PDF logical size.
+
+RESULT: Both the write path (gesture -> relative) and the read path
+(relative -> paint) have the same wrong scale applied, so they partially cancel
+out — highlights appear approximately correct when the PDF exactly fills the
+viewport with no zoom. But:
+
+  - Any zoom level change breaks alignment
+  - Paginated vs continuous mode renders the page at different viewport fills
+  - Different screen sizes and DPRs produce different fills
+  - Page margins/spacing (pageSpacing: 4) are not accounted for
+  - Pages after page 0 with different sizes are completely wrong (see 1b below)
+
+PROBLEM 1b: First-page size used for all pages
+
+  // reader_page.dart:109 — only ever reads page[0]
+  final size = details.document.pages[0].size;
+
+If the PDF has mixed page sizes (landscape page in a portrait document),
+every page after the first has wrong coordinate scaling.
+
+WHY IT DISAPPEARS IN PAGINATED MODE SPECIFICALLY:
+In PdfPageLayoutMode.single, SfPdfViewer fits one page to fill the viewport
+width. In PdfPageLayoutMode.continuous, pages render more consistently relative
+to the container. The render geometry differs between modes, so annotations that
+appear roughly correct in one mode are visibly wrong in the other.
+
+
+PROBLEM 2: Text selection is unreliable
+--------------------------------------------------------------------------------
+The app does not use SfPdfViewer's text selection for annotation creation.
+The annotation system uses a custom rectangle drag — not text-aware at all.
+
+PdfInteractionMode.selection is only active during normal reading:
+
+  // reader_page.dart:480-482
+  final interactionMode = _annotating
+      ? PdfInteractionMode.pan
+      : PdfInteractionMode.selection;
+
+When _annotating = true, the viewer switches to pan mode, disabling the
+viewer's own selection, and GestureHandler takes over with raw drag detection.
+There is no bridge from SfPdfViewer's selection events to the annotation system.
+
+Consequence: when not in annotation mode, SfPdfViewer selection works, but its
+results (selected text, selection rects) are never captured for annotation.
+When in annotation mode, selection is disabled and replaced by a freehand
+rectangle drag that has the coordinate problem above.
+
+ADDITIONALLY: _ScrollAmplifier wraps the viewer with a Listener that reads
+pointer events even outside annotation mode:
+
+  // reader_page.dart:901-917
+  void _onPointerMove(PointerMoveEvent e) {
+    final extra = -dy * _ScrollAmplifier.amplification;
+    widget.controller.jumpTo(xOffset: current.dx, yOffset: current.dy + extra);
+  }
+
+The jumpTo calls fight SfPdfViewer's own scroll physics. This can interfere
+with gesture recognition and cause the viewer to intermittently ignore input.
+
+
+PROBLEM 3: Highlights are position-bound rather than text-bound
+--------------------------------------------------------------------------------
+The model stores four normalized floats and nothing else:
+
+  // relative_rect_model.dart
+  class RelativeRectModel {
+    final double top, left, bottom, right;
+  }
+
+Annotation.text is only populated for notes. There is no selectedText,
+no character index, no text range. Highlights have zero text context stored.
+
+WHAT SYNCFUSION EXPOSES FOR TEXT ANCHORING:
+
+syncfusion_flutter_pdf (the non-viewer package) has:
+  - PdfPage.extractText() — extracts all text from a page as a flat string
+  - PdfTextExtractor class with word and line boundary detection
+  - PdfTextLine, PdfTextWord, PdfTextElement with bounding rectangles
+  - No character-index API that maps to screen positions
+
+SfPdfViewer (the viewer package) exposes via selection:
+  - PdfViewerController.getSelectedText() — returns the selected text string
+  - Selection rect callback (not wired in this codebase, but available via
+    onTextSelectionChanged)
+
+Text extraction bounding boxes from syncfusion_flutter_pdf are in PDF coordinate
+space (same units as pages[0].size), not screen pixels.
+
+
+PROBLEM 4: Notes are insufficiently anchored
+--------------------------------------------------------------------------------
+Notes are stored as a 24x24 point anchor rect centered on the tap position:
+
+  // gesture_handler.dart:93-98
+  const anchorSize = 24.0;
+  final absoluteRect = Rect.fromCenter(
+    center: position,
+    width: anchorSize,
+    height: anchorSize,
+  );
+
+The position is the raw screen tap coordinate — same coordinate-space bug as
+highlights. Additionally:
+  - No associated text is stored
+  - No text range
+  - The anchor represents "user tapped somewhere near here" with no document
+    semantics
+
+
+PROBLEM 5: Note visual indicator
+--------------------------------------------------------------------------------
+Current implementation renders a solid circle + white dot:
+
+  // highlight_painter.dart:50-70
+  canvas.drawCircle(center, 8, paint);
+  canvas.drawCircle(center, 3, whitePaint);
+
+Issues:
+  - An 8px radius circle is extremely small at standard DPI
+  - No associated text highlight behind the note anchor
+  - The text that triggered the note has no visual indicator
+  - Multiple overlapping notes in the same region stack invisibly
+  - Notes in the panel show the note text but don't show the highlighted text
+
+
+SILENT BUG: canUndoAnnotationProvider NEVER UPDATED
+--------------------------------------------------------------------------------
+The toolbar watches:
+
+  // annotation_toolbar.dart:34
+  final canUndo = ref.watch(canUndoAnnotationProvider);
+  onPressed: canUndo ? onUndo : null,
+
+But AnnotationNotifier never updates canUndoAnnotationProvider:
+
+  // annotation_notifier.dart:193-198
+  void _addAnnotation(Annotation annotation) {
+    state = [...state, annotation];
+    _undoStack.add(annotation.id);
+    // <- canUndoAnnotationProvider is never set to true
+    _debouncedSave(annotation);
+  }
+
+The canUndo getter exists on the notifier itself:
+  bool get canUndo => _undoStack.isNotEmpty;
+
+But nothing pushes this to canUndoAnnotationProvider. It is initialized to
+false and never changed.
+
+THE UNDO BUTTON IS PERMANENTLY DISABLED FOR ALL USERS.
+
+
+================================================================================
+ADDITIONAL ARCHITECTURE ISSUES
+================================================================================
+
+ISSUE A: Debounce drops annotations when adding rapidly
+--------------------------------------------------------------------------------
+  // annotation_notifier.dart:200-213
+  void _debouncedSave(Annotation annotation) {
+    _debounce.run(() async {
+      await _dao.upsert(annotation);
+    });
+  }
+
+Debounce.run cancels the previous timer and schedules a new one. If the user
+adds a highlight and immediately adds a note within 300ms, the highlight save
+is cancelled. The note fires after 300ms and saves only itself. The highlight
+is lost from the DB (though it exists in memory until the next loadForPage
+replaces state).
+
+
+ISSUE B: Annotation panel does not react to live state changes
+--------------------------------------------------------------------------------
+  // annotation_panel.dart:56-61
+  Future<void> _load() async {
+    final annotations = await ref.read(annotationNotifierProvider.notifier)
+        .loadAllForPdf(widget.pdfId);
+    if (mounted) setState(() => _annotations = annotations);
+  }
+
+_annotations is a local List? — it does not watch annotationNotifierProvider.
+If the user adds or removes an annotation while the panel is open, the panel
+will not reflect it. The delete path calls _load() again, but add does not.
+
+
+ISSUE C: Continuous mode loads only +/-1 page
+--------------------------------------------------------------------------------
+  // annotation_notifier.dart:41-55
+  final startPage = max(1, page - 1);
+  final endPage = page + 1;
+
+In PdfPageLayoutMode.continuous, 3-5 pages can be simultaneously visible.
+Only loading +/-1 means annotations on visible pages 2 positions away are
+missing. The _visibleAnnotations filter compounds this:
+
+  // reader_page.dart:351-353
+  List<app.Annotation> _visibleAnnotations(List<app.Annotation> all) =>
+      all.where((a) => a.page == _currentPage && !a.isDeleted).toList();
+
+Even if annotations for adjacent pages were loaded, _visibleAnnotations only
+shows annotations for _currentPage. In continuous mode this is completely
+wrong — you need annotations for every visible page.
+
+
+ISSUE D: Settings not persisted
+--------------------------------------------------------------------------------
+ReadingMode and ScrollDirection are stored as local widget state:
+
+  // reader_page.dart:73-75
+  ReadingMode _readingMode = ReadingMode.light;
+  ScrollDirection _scrollDirection = ScrollDirection.paginated;
+
+Neither is persisted. Every time the reader opens, it resets to light mode and
+paginated. ReadingProgressService only saves the last page.
+
+
+================================================================================
+ANNOTATION ANCHORING STRATEGY: EVALUATION
+================================================================================
+
+OPTION A: Coordinate-based (current approach)
+Stores visual coordinates normalized to page size.
+
+  PRO: Simple to implement, no dependency on text extraction
+  PRO: Works for non-text annotations (drawn shapes, image areas)
+  CON: Fails when render scale changes if coordinates were captured at a
+       different scale
+  CON: Requires knowing the exact render transform at both capture and display
+  CON: Cannot locate "what text is highlighted" — can't integrate with search,
+       copy, or accessibility
+
+VERDICT: Viable only if the coordinate space is correctly defined as PDF
+user-space (not screen pixels). Currently broken because both capture and
+display use screen pixels disguised as PDF points.
+
+
+OPTION B: Text-range anchoring
+Store the character start/end index within the page's extracted text string,
+plus the verbatim selected text.
+
+  PRO: Survives zoom changes, orientation changes, DPI differences
+  PRO: Can be restored by re-extracting text and finding the text range
+  PRO: Enables copy, share, search integration
+  CON: Requires PdfTextExtractor to extract text on annotation creation and
+       on render (~50-200ms per page)
+  CON: Fails if PDF is regenerated with different text layout
+  CON: Character indices are fragile if text contains markup or encoding issues
+  CON: Requires matching bounding boxes from extraction to screen coordinates —
+       the same transform problem, just deferred to extraction time
+
+
+OPTION C: Hybrid anchoring (RECOMMENDED)
+Store both a text anchor and a visual fallback:
+
+  selectedText:   "the actual selected text"
+  textRunStart:   character index in page text
+  textRunEnd:     character index in page text
+  relativeBounds: normalized PDF-unit rect (0.0-1.0 of PDF page dimensions)
+
+HOW IT WORKS:
+
+At capture time:
+  After the user creates an annotation, run PdfTextExtractor on the affected
+  page. Find which text lines/words fall within the drag rect (in PDF
+  coordinates after correcting the coordinate bug). Store the verbatim text
+  content and the PDF-unit bounding rect normalized to 0-1.
+
+At render time:
+  Use the normalized PDF-unit bounding rect to compute screen coordinates:
+
+    screenX = rel.left * renderedPageWidthInPixels
+    screenY = rel.top  * renderedPageHeightInPixels
+
+  renderedPageWidthInPixels must be measured, not assumed — see coordinate
+  fix below.
+
+If text anchor is available:
+  Verify the stored text exists at the expected location. If it has moved,
+  use a fuzzy text match to relocate the annotation.
+
+VERDICT: Option C is the production-grade choice. It degrades gracefully —
+if text extraction fails, the visual bounds still work. If zoom changes, the
+text anchor provides ground truth.
+
+
+================================================================================
+COORDINATE SYSTEM FIX (THE CRITICAL FIX)
+================================================================================
+
+The correct pageSize to use in toRelative and toAbsolute is the RENDERED SCREEN
+SIZE of the PDF page, not the PDF logical size.
+
+With SfPdfViewer you can infer the rendered page size using LayoutBuilder:
+
+  // In _ReaderPageState, add:
+  Size _renderedPageSize = Size.zero;
+
+  // In _buildViewer(), wrap SfPdfViewer in LayoutBuilder:
+  LayoutBuilder(
+    builder: (context, constraints) {
+      final availableWidth = constraints.maxWidth;
+      if (_pageSize != Size.zero) {
+        final aspectRatio = _pageSize.height / _pageSize.width;
+        final renderedHeight = availableWidth * aspectRatio;
+        if (_renderedPageSize.width != availableWidth) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _renderedPageSize = Size(availableWidth, renderedHeight);
+              });
+            }
+          });
+        }
+      }
+      return SfPdfViewer.file(...);
+    },
+  )
+
+Then pass _renderedPageSize to GestureHandler and HighlightPainter instead of
+_pageSize. _pageSize (PDF logical size) is only needed for aspect ratio
+calculation and for PdfTextExtractor coordinate math.
+
+IMPORTANT CAVEATS:
+  - SfPdfViewer applies its own internal margins. The actual PDF page within
+    the viewport may not start at (0, 0). Measure or hard-code the margin to
+    subtract from gesture coordinates.
+  - At zoom level > 1.0, the rendered page is larger than the viewport. You
+    need to account for scroll offset when mapping gesture coordinates.
+  - In continuous mode with page spacing (pageSpacing: 4), the vertical offset
+    of each page changes. Each page's top-left in screen space equals the sum
+    of all preceding rendered page heights plus spacing. This makes per-page
+    annotation in continuous mode significantly more complex.
+
+
+================================================================================
+DATABASE SCHEMA RECOMMENDATIONS
+================================================================================
+
+Current schema is at version 3. Missing: selected_text, text_run_start,
+text_run_end, pdf_width, pdf_height. The Dart model also lacks createdAt/
+updatedAt despite those columns existing in the DB schema.
+
+Migration to v4:
+
+  ALTER TABLE annotations ADD COLUMN selected_text TEXT;
+  ALTER TABLE annotations ADD COLUMN text_run_start INTEGER;
+  ALTER TABLE annotations ADD COLUMN text_run_end INTEGER;
+  ALTER TABLE annotations ADD COLUMN pdf_width REAL;
+  ALTER TABLE annotations ADD COLUMN pdf_height REAL;
+  ALTER TABLE annotations ADD COLUMN coordinate_version INTEGER NOT NULL DEFAULT 1;
+
+pdf_width and pdf_height allow detecting if a PDF was replaced with a
+different-dimension version, invalidating coordinate-based annotations.
+coordinate_version = 1 marks pre-fix data; = 2 marks corrected data.
+
+Updated Dart model:
+
+  @freezed
+  abstract class Annotation with _$Annotation {
+    const factory Annotation({
+      required String id,
+      required String pdfId,
+      required int page,
+      required AnnotationType type,
+      RelativeRectModel? rect,       // normalized to PDF user-space (0-1)
+      String? selectedText,          // the actual highlighted text
+      int? textRunStart,             // character index in page text
+      int? textRunEnd,               // character index in page text
+      String? text,                  // note content
+      String? label,
+      @Default(AnnotationColor.yellow) AnnotationColor color,
+      @Default(false) bool isDeleted,
+      @Default(1) int coordinateVersion,
+      DateTime? createdAt,
+      DateTime? updatedAt,
+    }) = _Annotation;
+  }
+
+
+================================================================================
+IMMEDIATE FIXES, ORDERED BY IMPACT
+================================================================================
+
+FIX 1: canUndoAnnotationProvider never updated (undo permanently broken)
+--------------------------------------------------------------------------------
+In AnnotationNotifier._addAnnotation and undo():
+
+  void _addAnnotation(Annotation annotation) {
+    state = [...state, annotation];
+    _undoStack.add(annotation.id);
+    if (_undoStack.length > _maxUndoDepth) _undoStack.removeAt(0);
+    ref.read(canUndoAnnotationProvider.notifier).setValue(true);  // ADD THIS
+    _debouncedSave(annotation);
+  }
+
+  Future<String?> undo() async {
+    if (_undoStack.isEmpty) return null;
+    final id = _undoStack.removeLast();
+    // ... existing logic ...
+    if (_undoStack.isEmpty) {
+      ref.read(canUndoAnnotationProvider.notifier).setValue(false); // ADD THIS
+    }
+    return ...;
+  }
+
+
+FIX 2: Debounce drops annotations when adding rapidly
+--------------------------------------------------------------------------------
+The simplest correct fix: save immediately for discrete user actions.
+Debouncing only makes sense for high-frequency updates (e.g. drag previews),
+not for discrete annotation adds:
+
+  void _addAnnotation(Annotation annotation) {
+    state = [...state, annotation];
+    _undoStack.add(annotation.id);
+    if (_undoStack.length > _maxUndoDepth) _undoStack.removeAt(0);
+    ref.read(canUndoAnnotationProvider.notifier).setValue(true);
+    _dao.upsert(annotation).catchError((e, s) => developer.log(
+      'Failed to save annotation ${annotation.id}',
+      name: 'pdf_app.annotation',
+      level: 1000,
+      error: e,
+      stackTrace: s,
+    ));
+  }
+
+If debouncing is desired for battery/write reasons, maintain a Set<String> of
+pending save IDs and batch them — never cancel a pending save by scheduling
+a new one for a different annotation.
+
+
+FIX 3: Per-page size map for mixed-size PDFs
+--------------------------------------------------------------------------------
+  // In _ReaderPageState:
+  final _pageSizes = <int, Size>{};
+
+  void _onDocumentLoaded(PdfDocumentLoadedDetails details) {
+    final doc = details.document;
+    for (var i = 0; i < doc.pages.count; i++) {
+      final s = doc.pages[i].size;
+      _pageSizes[i + 1] = Size(s.width, s.height);
+    }
+    // ... rest of existing logic
+  }
+
+Pass _pageSizes[_currentPage] ?? _pageSize wherever page size is needed.
+
+
+FIX 4: Persist reading mode and scroll direction
+--------------------------------------------------------------------------------
+Add to ReadingProgressService (or a new AppSettingsService):
+
+  Future<ReadingMode> getReadingMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = prefs.getString('reading_mode') ?? 'light';
+    return ReadingMode.values.firstWhere(
+      (m) => m.name == name,
+      orElse: () => ReadingMode.light,
+    );
+  }
+
+  Future<void> saveReadingMode(ReadingMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('reading_mode', mode.name);
+  }
+
+Load in initState, save on mode/direction change.
+
+
+FIX 5: Continuous mode — show annotations for all visible pages
+--------------------------------------------------------------------------------
+  List<app.Annotation> _visibleAnnotations(List<app.Annotation> all) {
+    if (_scrollDirection == ScrollDirection.continuous) {
+      return all.where((a) => !a.isDeleted).toList();
+    }
+    return all.where((a) => a.page == _currentPage && !a.isDeleted).toList();
+  }
+
+And expand the load window in loadForPage for continuous mode:
+
+  Future<void> loadForPage(String pdfId, int page, {int window = 1}) async {
+    final startPage = max(1, page - window);
+    final endPage = page + window;
+    ...
+  }
+
+Call with window: 3 in continuous mode.
+
+
+FIX 6: Note UX — highlight behind note anchor + badge icon
+--------------------------------------------------------------------------------
+In HighlightPainter._paintNoteAnchor:
+
+  void _paintNoteAnchor(Canvas canvas, Annotation annotation) {
+    final rect = annotation.rect;
+    if (rect == null) return;
+
+    final absoluteRect = toAbsolute(rect, pageSize);
+
+    // Draw the associated text highlight.
+    canvas.drawRect(
+      absoluteRect,
+      Paint()
+        ..color = annotation.color.overlay
+        ..style = PaintingStyle.fill,
+    );
+
+    // Draw a note badge at the top-right of the highlighted region.
+    final badgeCenter = absoluteRect.topRight + const Offset(-12, 12);
+    canvas.drawCircle(
+      badgeCenter,
+      10,
+      Paint()..color = annotation.color.solid,
+    );
+
+    final textPainter = TextPainter(
+      text: const TextSpan(
+        text: '✎',  // pencil icon character
+        style: TextStyle(fontSize: 11, color: Colors.white),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    textPainter.paint(
+      canvas,
+      badgeCenter - Offset(textPainter.width / 2, textPainter.height / 2),
+    );
+  }
+
+
+================================================================================
+GLOBAL SETTINGS ARCHITECTURE
+================================================================================
+
+Introduce AppSettingsService backed by SharedPreferences:
+
+  class AppSettings {
+    final ReadingMode readingMode;
+    final ScrollDirection scrollDirection;
+    final AnnotationColor defaultHighlightColor;
+    final AnnotationColor defaultNoteColor;
+    final double highlightOpacity;      // 0.0-1.0
+    final bool noteIconVisible;
+    final bool rememberLastPage;
+    final bool autoSaveAnnotations;
+  }
+
+  abstract class AppSettingsStore {
+    Future<AppSettings> load();
+    Future<void> save(AppSettings settings);
+  }
+
+Expose via Riverpod:
+
+  final appSettingsProvider = AsyncNotifierProvider<AppSettingsNotifier, AppSettings>(
+    AppSettingsNotifier.new,
+  );
+
+Reader page reads from this on init and writes on change. No more ephemeral
+setState for mode/direction.
+
+
+================================================================================
+TEXT ANCHORING IMPLEMENTATION PLAN
+================================================================================
+
+For highlights, the flow after the coordinate bug is fixed:
+
+1. User drags -> GestureHandler captures drag rect in screen pixels
+2. Convert screen rect -> PDF user-space rect using rendered page size
+3. Use syncfusion_flutter_pdf.PdfTextExtractor to find all PdfTextLine /
+   PdfTextWord objects whose bounding rects intersect the PDF user-space rect
+4. Collect those words -> selectedText = words.map((w) => w.text).join(' ')
+5. Collect the union bounding rect of all matching words -> store as
+   RelativeRectModel normalized to PDF page size (0.0-1.0)
+6. Store textRunStart and textRunEnd as character positions in the full page
+   text string
+
+At render time, the RelativeRectModel (in PDF user-space) maps to screen pixels:
+
+  screenRect = Rect.fromLTRB(
+    rel.left  * renderedWidth,
+    rel.top   * renderedHeight,
+    rel.right * renderedWidth,
+    rel.bottom * renderedHeight,
+  )
+
+This is only accurate if renderedWidth is the true rendered page width in screen
+pixels — which requires the LayoutBuilder measurement described above.
+
+
+================================================================================
+PERFORMANCE OPTIMIZATION PLAN
+================================================================================
+
+CURRENT BOTTLENECKS:
+
+1. ref.watch(annotationNotifierProvider) triggers _buildBody on every annotation
+   state change, rebuilding the entire body Stack
+
+2. _visibleAnnotations is O(n) called on every build()
+
+3. HighlightPainter.shouldRepaint compares full list reference — since Riverpod
+   returns new list instances on every state update, shouldRepaint always returns
+   true even if visible annotations are identical
+
+FIXES:
+
+Extract _AnnotationOverlay into a ConsumerWidget with .select():
+
+  class _AnnotationOverlay extends ConsumerWidget {
+    const _AnnotationOverlay({required this.pageSize, required this.currentPage});
+
+    final Size pageSize;
+    final int currentPage;
+
+    @override
+    Widget build(BuildContext context, WidgetRef ref) {
+      final annotations = ref.watch(
+        annotationNotifierProvider.select(
+          (list) => list
+              .where((a) => a.page == currentPage && !a.isDeleted)
+              .toList(),
+        ),
+      );
+      // render ...
+    }
+  }
+
+Using .select() means this widget only rebuilds when annotations for the current
+page actually change.
+
+Fix shouldRepaint to use value equality:
+
+  @override
+  bool shouldRepaint(covariant HighlightPainter old) {
+    if (old.pageSize != pageSize) return true;
+    if (old.annotations.length != annotations.length) return true;
+    for (var i = 0; i < annotations.length; i++) {
+      if (old.annotations[i] != annotations[i]) return true;  // freezed equality
+    }
+    return false;
+  }
+
+
+================================================================================
+MIGRATION STRATEGY
+================================================================================
+
+Coordinate data stored under DB versions 1-3 is in the incorrect coordinate
+space (screen pixels normalized by PDF logical size). This data cannot be
+recovered to true PDF user-space coordinates without knowing the screen size
+and DPI at capture time — which were not stored.
+
+RECOMMENDED APPROACH:
+
+- In migration v4: add new columns (selected_text, text_run_start, text_run_end,
+  pdf_width, pdf_height, coordinate_version)
+- Do NOT attempt to backfill old coordinate data — it cannot be corrected
+- Mark all existing annotations pre-v4 with coordinate_version = 1
+- At render time, render coordinate_version = 1 annotations with a visual
+  indicator: "This annotation may be misaligned — it was created before an
+  app update" — or render as-is and let users delete/re-create
+- New annotations store coordinate_version = 2 with corrected coordinates
+
+This is the honest, user-respecting approach. Silently "correcting" old
+coordinates with a heuristic will produce worse results than acknowledging
+the issue.
+
+
+================================================================================
+PRODUCTION-READY IMPLEMENTATION PRIORITY TABLE
+================================================================================
+
+P0  Fix canUndoAnnotationProvider never updated          10 min  Undo works
+P0  Fix debounce dropping annotations                    30 min  Data integrity
+P1  Fix coordinate space (screen px vs PDF pts)           4 hr   Highlights align
+P1  Per-page size map                                     1 hr   Mixed PDFs work
+P1  Continuous mode: load/show all visible page annots    2 hr   Continuous usable
+P2  Persist reading mode and scroll direction             1 hr   Settings survive restart
+P2  Store selectedText on highlights                      2 hr   Text context available
+P2  Note UX: highlight behind note + badge icon           2 hr   Notes discoverable
+P2  _AnnotationOverlay as ConsumerWidget with .select()   1 hr   Fewer rebuilds
+P3  AppSettingsService and settings UI                    4 hr   Full settings panel
+P3  Text anchoring via PdfTextExtractor                   8 hr   Zoom-proof highlights
+P3  DB migration v4 + coordinate_version flag             2 hr   Clean migration
+
+
+================================================================================
+END OF AUDIT
+================================================================================

@@ -1,20 +1,28 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart' show PdfDocument, PdfTextExtractor;
 
 import 'package:pdf_app/core/models/annotation_color.dart';
+import 'package:pdf_app/core/models/relative_rect_model.dart';
 import 'package:pdf_app/core/utils/coordinate_mapper.dart';
 import 'package:pdf_app/features/reader/presentation/annotation_toolbar.dart';
 import 'package:pdf_app/features/reader/state/providers.dart';
 
-/// Captures annotation gestures on top of the PDF viewer.
+/// Captures annotation gestures on top of a single PDF page overlay.
 ///
-/// Behavior depends on [activeTool]:
-/// - [AnnotationTool.highlight]: drag creates a highlight
-/// - [AnnotationTool.note]: tap opens an inline bottom-sheet note input
-/// - [AnnotationTool.bookmark]: tap creates a bookmark
+/// Receives [pageSize] from [PdfViewerParams.pageOverlaysBuilder], which
+/// provides the exact rendered pixel size of the page — so coordinate
+/// math via [toRelative] / [toAbsolute] is correct without any scaling.
 ///
-/// Only inserted into the widget tree when annotation mode is active,
-/// eliminating gesture disambiguation overhead during normal reading.
+/// [pdfPageSize] is the PDF logical page size in user-space points (from
+/// [PdfPage.width] / [PdfPage.height]). Used only to convert relative coords
+/// back to PDF points for [PdfTextExtractor] word-overlap detection.
+///
+/// [sfDocument] is the syncfusion_flutter_pdf document loaded separately for
+/// text extraction. Null for image-only PDFs or before the document loads;
+/// in those cases text extraction is skipped gracefully.
 class GestureHandler extends ConsumerStatefulWidget {
   const GestureHandler({
     super.key,
@@ -22,12 +30,16 @@ class GestureHandler extends ConsumerStatefulWidget {
     required this.currentPage,
     required this.pdfId,
     required this.activeTool,
+    this.pdfPageSize = Size.zero,
+    this.sfDocument,
   });
 
   final Size pageSize;
+  final Size pdfPageSize;
   final int currentPage;
   final String pdfId;
   final AnnotationTool activeTool;
+  final PdfDocument? sfDocument;
 
   @override
   ConsumerState<GestureHandler> createState() => _GestureHandlerState();
@@ -59,13 +71,14 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
     if (start != null && end != null) {
       final rect = Rect.fromPoints(start, end);
       if (rect.width > 10 && rect.height > 4) {
-        ref
-            .read(annotationNotifierProvider.notifier)
-            .addHighlight(
-              rect: toRelative(rect, widget.pageSize),
-              page: widget.currentPage,
-              color: _activeColor,
-            );
+        final relRect = toRelative(rect, widget.pageSize);
+        final selectedText = _extractText(relRect);
+        ref.read(annotationNotifierProvider.notifier).addHighlight(
+          rect: relRect,
+          page: widget.currentPage,
+          color: _activeColor,
+          selectedText: selectedText,
+        );
       }
     }
 
@@ -75,10 +88,61 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
     });
   }
 
+  /// Extracts the text words that overlap [relRect] using Syncfusion's
+  /// PdfTextExtractor.
+  ///
+  /// [relRect] is in normalized [0,1] coords relative to the rendered page.
+  /// We convert it to PDF user-space by multiplying by [pdfPageSize].
+  ///
+  /// Returns null silently if the document has no extractable text (scanned
+  /// or image-only PDF), or if extraction throws for any reason.
+  String? _extractText(RelativeRectModel relRect) {
+    final doc = widget.sfDocument;
+    if (doc == null) return null;
+
+    final pdf = widget.pdfPageSize;
+    if (pdf == Size.zero) return null;
+
+    final pdfLeft = relRect.left * pdf.width;
+    final pdfTop = relRect.top * pdf.height;
+    final pdfRight = relRect.right * pdf.width;
+    final pdfBottom = relRect.bottom * pdf.height;
+
+    try {
+      final extractor = PdfTextExtractor(doc);
+      final lines = extractor.extractTextLines(
+        startPageIndex: widget.currentPage - 1,
+        endPageIndex: widget.currentPage - 1,
+      );
+
+      final words = <String>[];
+      for (final line in lines) {
+        for (final word in line.wordCollection) {
+          final b = word.bounds;
+          final overlaps = b.left < pdfRight &&
+              b.left + b.width > pdfLeft &&
+              b.top < pdfBottom &&
+              b.top + b.height > pdfTop;
+          if (overlaps) words.add(word.text);
+        }
+      }
+      return words.isEmpty ? null : words.join(' ');
+    } catch (e, s) {
+      developer.log(
+        'Text extraction failed on page ${widget.currentPage}',
+        name: 'pdf_app.gesture',
+        level: 500,
+        error: e,
+        stackTrace: s,
+      );
+      return null;
+    }
+  }
+
   Future<void> _onTap(TapUpDetails details) async {
     switch (widget.activeTool) {
       case AnnotationTool.highlight:
-        break; // Handled by drag.
+        break;
       case AnnotationTool.note:
         await _addNote(details.localPosition);
       case AnnotationTool.bookmark:
@@ -96,14 +160,12 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
       width: anchorSize,
       height: anchorSize,
     );
-    ref
-        .read(annotationNotifierProvider.notifier)
-        .addNote(
-          rect: toRelative(absoluteRect, widget.pageSize),
-          text: text,
-          page: widget.currentPage,
-          color: _activeColor,
-        );
+    ref.read(annotationNotifierProvider.notifier).addNote(
+      rect: toRelative(absoluteRect, widget.pageSize),
+      text: text,
+      page: widget.currentPage,
+      color: _activeColor,
+    );
   }
 
   void _addBookmark() {
@@ -119,10 +181,6 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
     );
   }
 
-  /// Shows a bottom-sheet note input instead of a modal dialog.
-  ///
-  /// Bottom sheet keeps the document visible and feels less disruptive
-  /// than a full modal dialog.
   Future<String?> _showNoteInput() {
     return showModalBottomSheet<String>(
       context: context,
@@ -153,7 +211,7 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
 }
 
 // ---------------------------------------------------------------------------
-// Note input bottom sheet
+// Note input sheet
 // ---------------------------------------------------------------------------
 
 class _NoteInputSheet extends StatefulWidget {
