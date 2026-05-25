@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pdf_app/core/constants.dart';
 import 'package:pdf_app/features/home/presentation/home_shell.dart';
 import 'package:pdf_app/features/reader/presentation/reader_page.dart';
+import 'package:pdf_app/features/settings/presentation/settings_page.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
@@ -19,6 +20,11 @@ final GoRouter appRouter = GoRouter(
         final pdfPath = state.extra as String? ?? kSamplePdfPath;
         return ReaderPage(pdfPath: pdfPath);
       },
+    ),
+    GoRoute(
+      path: '/settings',
+      name: 'settings',
+      builder: (context, state) => const SettingsPage(),
     ),
   ],
 );

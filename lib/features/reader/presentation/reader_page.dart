@@ -12,7 +12,6 @@ import 'package:pdf_app/core/constants.dart';
 import 'package:pdf_app/core/models/annotation.dart' as app;
 import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
-import 'package:pdf_app/core/services/app_settings_service.dart';
 import 'package:pdf_app/core/theme/reading_mode.dart';
 import 'package:pdf_app/core/theme/scroll_direction.dart';
 import 'package:pdf_app/features/library/state/library_providers.dart';
@@ -55,11 +54,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool _annotating = false;
   AnnotationTool _activeTool = AnnotationTool.highlight;
 
-  // Reading mode.
-  ReadingMode _readingMode = ReadingMode.light;
-
-  // Scroll direction.
-  ScrollDirection _scrollDirection = ScrollDirection.paginated;
+  // Reading mode and scroll direction are derived from the global settings
+  // provider in build() — no local fields needed.
 
   // Bookmark state for current page.
   bool _currentPageBookmarked = false;
@@ -67,16 +63,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool get _isAsset =>
       !widget.pdfPath.startsWith('/') && !widget.pdfPath.contains('://');
 
-  bool get _isContinuous => _scrollDirection == ScrollDirection.continuous;
-
   @override
   void initState() {
     super.initState();
     _pdfController = PdfViewerController();
     _scheduleAutoHide();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(libraryEntriesProvider.notifier).recordOpened(widget.pdfPath);
-      await _loadSettings();
     });
   }
 
@@ -84,28 +77,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void dispose() {
     _autoHideTimer?.cancel();
     super.dispose();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Settings persistence
-  // ---------------------------------------------------------------------------
-
-  Future<void> _loadSettings() async {
-    final store = ref.read(appSettingsServiceProvider);
-    final settings = await store.load();
-    if (mounted) {
-      setState(() {
-        _readingMode = settings.readingMode;
-        _scrollDirection = settings.scrollDirection;
-      });
-    }
-  }
-
-  Future<void> _saveSettings() async {
-    final store = ref.read(appSettingsServiceProvider);
-    await store.save(
-      AppSettings(readingMode: _readingMode, scrollDirection: _scrollDirection),
-    );
   }
 
   // ---------------------------------------------------------------------------
@@ -127,7 +98,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     ref
         .read(annotationNotifierProvider.notifier)
-        .loadForPage(widget.pdfPath, _currentPage, window: _isContinuous ? 3 : 1);
+        .loadForPage(
+          widget.pdfPath,
+          _currentPage,
+          window:
+              ref.read(appSettingsProvider).scrollDirection ==
+                  ScrollDirection.continuous
+              ? 3
+              : 1,
+        );
 
     _loadSfDocument();
   }
@@ -166,7 +145,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ref.read(readerNotifierProvider.notifier).onPageChanged(page);
     ref
         .read(annotationNotifierProvider.notifier)
-        .loadForPage(widget.pdfPath, page, window: _isContinuous ? 3 : 1);
+        .loadForPage(
+          widget.pdfPath,
+          page,
+          window:
+              ref.read(appSettingsProvider).scrollDirection ==
+                  ScrollDirection.continuous
+              ? 3
+              : 1,
+        );
   }
 
   // ---------------------------------------------------------------------------
@@ -339,6 +326,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   void _openMore() {
     _hideBars();
+    final settings = ref.read(appSettingsProvider);
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -351,16 +339,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           Navigator.of(ctx).pop();
           showMorePanel(
             context: context,
-            currentMode: _readingMode,
-            onModeChanged: (mode) {
-              setState(() => _readingMode = mode);
-              _saveSettings();
-            },
-            currentScrollDirection: _scrollDirection,
-            onScrollDirectionChanged: (dir) {
-              setState(() => _scrollDirection = dir);
-              _saveSettings();
-            },
+            currentMode: settings.readingMode,
+            onModeChanged: (mode) =>
+                ref.read(appSettingsProvider.notifier).setReadingMode(mode),
+            currentScrollDirection: settings.scrollDirection,
+            onScrollDirectionChanged: (dir) =>
+                ref.read(appSettingsProvider.notifier).setScrollDirection(dir),
           ).then((_) => _showBars());
         },
       ),
@@ -376,6 +360,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   @override
   Widget build(BuildContext context) {
     ref.watch(annotationNotifierProvider);
+    final settings = ref.watch(appSettingsProvider);
+    final readingMode = settings.readingMode;
 
     final Widget? bottomBar;
     if (_annotating) {
@@ -384,7 +370,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         onToolChanged: (tool) => setState(() => _activeTool = tool),
         onExit: _exitAnnotationMode,
         onUndo: _performUndo,
-        readingMode: _readingMode,
+        readingMode: readingMode,
       );
     } else if (_barsVisible) {
       bottomBar = _BottomActionBar(
@@ -392,7 +378,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         onAnnotate: _enterAnnotationMode,
         onToc: _openToc,
         onMore: _openMore,
-        readingMode: _readingMode,
+        readingMode: readingMode,
       );
     } else {
       bottomBar = null;
@@ -405,14 +391,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         _navigateBack();
       },
       child: Scaffold(
-        backgroundColor: _readingMode.background,
+        backgroundColor: readingMode.background,
         appBar: _barsVisible && !_annotating
             ? _ReaderAppBar(
                 title: _documentTitle,
                 isBookmarked: _currentPageBookmarked,
                 onBack: _navigateBack,
                 onBookmark: _toggleBookmark,
-                readingMode: _readingMode,
+                readingMode: readingMode,
               )
             : null,
         bottomNavigationBar: bottomBar,
@@ -422,9 +408,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Widget _buildBody() {
+    final readingMode = ref.read(appSettingsProvider).readingMode;
     return Stack(
       children: [
-        _ReadingModeFilter(mode: _readingMode, child: _buildViewer()),
+        _ReadingModeFilter(mode: readingMode, child: _buildViewer()),
 
         Positioned(
           bottom: 16,
@@ -456,7 +443,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Widget _buildViewer() {
-    final bool isPaginated = _scrollDirection == ScrollDirection.paginated;
+    final bool isPaginated =
+        ref.read(appSettingsProvider).scrollDirection ==
+        ScrollDirection.paginated;
 
     final params = PdfViewerParams(
       layoutPages: isPaginated ? _horizontalPageLayout : null,
@@ -843,17 +832,49 @@ class _ReadingModeFilter extends StatelessWidget {
   final Widget child;
 
   static const _darkMatrix = ColorFilter.matrix(<double>[
-    -1, 0, 0, 0, 255,
-    0, -1, 0, 0, 255,
-    0, 0, -1, 0, 255,
-    0, 0, 0, 1, 0,
+    -1,
+    0,
+    0,
+    0,
+    255,
+    0,
+    -1,
+    0,
+    0,
+    255,
+    0,
+    0,
+    -1,
+    0,
+    255,
+    0,
+    0,
+    0,
+    1,
+    0,
   ]);
 
   static const _sepiaMatrix = ColorFilter.matrix(<double>[
-    0.393, 0.769, 0.189, 0, 0,
-    0.349, 0.686, 0.168, 0, 0,
-    0.272, 0.534, 0.131, 0, 0,
-    0, 0, 0, 1, 0,
+    0.393,
+    0.769,
+    0.189,
+    0,
+    0,
+    0.349,
+    0.686,
+    0.168,
+    0,
+    0,
+    0.272,
+    0.534,
+    0.131,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
   ]);
 
   @override
@@ -908,8 +929,10 @@ class _SideScrollThumbState extends State<_SideScrollThumb> {
           onVerticalDragStart: (d) {
             setState(() {
               _dragging = true;
-              _dragFraction =
-                  (d.localPosition.dy / trackHeight).clamp(0.0, 1.0);
+              _dragFraction = (d.localPosition.dy / trackHeight).clamp(
+                0.0,
+                1.0,
+              );
             });
           },
           onVerticalDragUpdate: (d) {

@@ -118,6 +118,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               tooltip: 'Rescan device',
               onPressed: () => ref.read(deviceFilesProvider.notifier).scan(),
             ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, size: 22),
+            tooltip: 'Settings',
+            onPressed: () => context.push('/settings'),
+          ),
         ],
       ),
       body: IndexedStack(

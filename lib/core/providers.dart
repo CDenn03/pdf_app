@@ -6,6 +6,8 @@ import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/services/app_settings_service.dart';
 import 'package:pdf_app/core/services/file_service.dart';
 import 'package:pdf_app/core/services/reading_progress_service.dart';
+import 'package:pdf_app/core/theme/reading_mode.dart';
+import 'package:pdf_app/core/theme/scroll_direction.dart';
 
 /// Core infrastructure providers shared across features.
 
@@ -28,6 +30,42 @@ final readingProgressProvider = Provider<ReadingProgressStore>((ref) {
 final appSettingsServiceProvider = Provider<AppSettingsStore>((ref) {
   return AppSettingsService();
 });
+
+/// Exposes and persists global app settings (reading mode, scroll direction).
+///
+/// Starts with the hardcoded fallback and loads persisted values
+/// asynchronously on first build.
+final appSettingsProvider = NotifierProvider<AppSettingsNotifier, AppSettings>(
+  AppSettingsNotifier.new,
+);
+
+/// Notifier for [AppSettings].
+///
+/// Loads from [AppSettingsStore] on build and persists on every mutation.
+class AppSettingsNotifier extends Notifier<AppSettings> {
+  @override
+  AppSettings build() {
+    _load();
+    return const AppSettings();
+  }
+
+  Future<void> _load() async {
+    final settings = await ref.read(appSettingsServiceProvider).load();
+    state = settings;
+  }
+
+  /// Updates the global reading mode and persists it.
+  Future<void> setReadingMode(ReadingMode mode) async {
+    state = state.copyWith(readingMode: mode);
+    await ref.read(appSettingsServiceProvider).save(state);
+  }
+
+  /// Updates the global scroll direction and persists it.
+  Future<void> setScrollDirection(ScrollDirection direction) async {
+    state = state.copyWith(scrollDirection: direction);
+    await ref.read(appSettingsServiceProvider).save(state);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Simple value providers — defined here (in core) so that AnnotationNotifier
