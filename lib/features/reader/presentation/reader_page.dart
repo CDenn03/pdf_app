@@ -12,9 +12,9 @@ import 'package:pdf_app/core/constants.dart';
 import 'package:pdf_app/core/models/annotation.dart' as app;
 import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
+import 'package:pdf_app/core/services/app_settings_service.dart';
 import 'package:pdf_app/core/theme/reading_mode.dart';
 import 'package:pdf_app/core/theme/scroll_direction.dart';
-import 'package:pdf_app/core/utils/coordinate_mapper.dart';
 import 'package:pdf_app/features/library/state/library_providers.dart';
 import 'package:pdf_app/features/reader/presentation/annotation_panel.dart';
 import 'package:pdf_app/features/reader/presentation/annotation_toolbar.dart';
@@ -28,9 +28,9 @@ import 'package:pdf_app/features/reader/state/providers.dart';
 /// The immersive PDF reader page.
 ///
 /// Uses [PdfViewer] from pdfrx, which renders each page as a Flutter widget.
-/// This means annotation overlays placed via [PdfViewerParams.pageOverlaysBuilder]
-/// are children of each page widget and scroll with the content — fixing the
-/// highlight drift problem that existed with the PlatformView-based SfPdfViewer.
+/// Annotation overlays placed via [PdfViewerParams.pageOverlaysBuilder] are
+/// children of each page widget and scroll with the content — fixing the
+/// highlight drift problem that existed with PlatformView-based viewers.
 class ReaderPage extends ConsumerStatefulWidget {
   final String pdfPath;
 
@@ -45,8 +45,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   int _currentPage = 1;
   int _totalPages = 1;
-  sf_pdf.PdfDocument?
-  _sfDocument; // syncfusion_flutter_pdf doc for TOC extraction
+  sf_pdf.PdfDocument? _sfDocument;
 
   // UI chrome visibility.
   bool _barsVisible = true;
@@ -68,28 +67,51 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool get _isAsset =>
       !widget.pdfPath.startsWith('/') && !widget.pdfPath.contains('://');
 
+  bool get _isContinuous => _scrollDirection == ScrollDirection.continuous;
+
   @override
   void initState() {
     super.initState();
     _pdfController = PdfViewerController();
     _scheduleAutoHide();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       ref.read(libraryEntriesProvider.notifier).recordOpened(widget.pdfPath);
+      await _loadSettings();
     });
   }
 
   @override
   void dispose() {
     _autoHideTimer?.cancel();
-    // PdfViewerController does not have a dispose method in pdfrx.
     super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Settings persistence
+  // ---------------------------------------------------------------------------
+
+  Future<void> _loadSettings() async {
+    final store = ref.read(appSettingsServiceProvider);
+    final settings = await store.load();
+    if (mounted) {
+      setState(() {
+        _readingMode = settings.readingMode;
+        _scrollDirection = settings.scrollDirection;
+      });
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    final store = ref.read(appSettingsServiceProvider);
+    await store.save(
+      AppSettings(readingMode: _readingMode, scrollDirection: _scrollDirection),
+    );
   }
 
   // ---------------------------------------------------------------------------
   // Document lifecycle
   // ---------------------------------------------------------------------------
 
-  /// Called by [PdfViewerParams.onViewerReady] once pdfrx has loaded the doc.
   void _onViewerReady(PdfDocument doc, PdfViewerController controller) async {
     final total = doc.pages.length;
     setState(() => _totalPages = total);
@@ -105,9 +127,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
     ref
         .read(annotationNotifierProvider.notifier)
-        .loadForPage(widget.pdfPath, _currentPage);
+        .loadForPage(widget.pdfPath, _currentPage, window: _isContinuous ? 3 : 1);
 
-    // Load the Syncfusion PDF document for TOC extraction (parser only).
     _loadSfDocument();
   }
 
@@ -132,11 +153,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         }
       }
     } catch (_) {
-      // TOC extraction is best-effort — failure is non-fatal.
+      // TOC/text extraction is best-effort — failure is non-fatal.
     }
   }
 
-  /// Called by [PdfViewerParams.onPageChanged].
   void _onPageChanged(int? page) {
     if (page == null) return;
     setState(() {
@@ -146,11 +166,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ref.read(readerNotifierProvider.notifier).onPageChanged(page);
     ref
         .read(annotationNotifierProvider.notifier)
-        .loadForPage(widget.pdfPath, page);
+        .loadForPage(widget.pdfPath, page, window: _isContinuous ? 3 : 1);
   }
 
   // ---------------------------------------------------------------------------
-  // Bar visibility — toggled by tapping the PDF area via SfPdfViewer callback
+  // Bar visibility
   // ---------------------------------------------------------------------------
 
   void _toggleBars() {
@@ -252,8 +272,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       builder: (ctx) =>
           _BookmarkLabelDialog(defaultLabel: 'Page $_currentPage'),
     );
-    // null = cancelled, empty string = use default
-    if (label == null) return; // user cancelledtr
+    if (label == null) return;
     ref
         .read(annotationNotifierProvider.notifier)
         .addBookmark(
@@ -333,15 +352,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           showMorePanel(
             context: context,
             currentMode: _readingMode,
-            onModeChanged: (mode) => setState(() => _readingMode = mode),
+            onModeChanged: (mode) {
+              setState(() => _readingMode = mode);
+              _saveSettings();
+            },
             currentScrollDirection: _scrollDirection,
-            onScrollDirectionChanged: (dir) =>
-                setState(() => _scrollDirection = dir),
+            onScrollDirectionChanged: (dir) {
+              setState(() => _scrollDirection = dir);
+              _saveSettings();
+            },
           ).then((_) => _showBars());
         },
       ),
     ).then((_) {
-      // Only show bars if no sub-panel was opened.
       if (mounted && !_annotating) _showBars();
     });
   }
@@ -352,7 +375,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch annotations so the overlay rebuilds when they change.
     ref.watch(annotationNotifierProvider);
 
     final Widget? bottomBar;
@@ -402,11 +424,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Widget _buildBody() {
     return Stack(
       children: [
-        // Layer 1: PDF viewer with reading mode filter.
-        // pdfrx renders pages as Flutter widgets — no PlatformView.
         _ReadingModeFilter(mode: _readingMode, child: _buildViewer()),
 
-        // Layer 2: Page indicator pill.
         Positioned(
           bottom: 16,
           left: 0,
@@ -420,7 +439,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           ),
         ),
 
-        // Layer 3: Side scroll thumb.
         if (_totalPages > 1)
           Positioned(
             right: 0,
@@ -438,21 +456,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Widget _buildViewer() {
-    // Continuous = vertical scroll through all pages (default pdfrx layout).
-    // Paginated = horizontal swipe, one page at a time via custom layoutPages.
     final bool isPaginated = _scrollDirection == ScrollDirection.paginated;
 
     final params = PdfViewerParams(
-      // For paginated mode, lay pages out horizontally side by side.
-      // For continuous mode, use the default vertical layout (null = default).
       layoutPages: isPaginated ? _horizontalPageLayout : null,
       margin: 8,
       onViewerReady: _onViewerReady,
       onPageChanged: _onPageChanged,
-      // onGeneralTap must return bool: true = handled, false = pass through.
       onGeneralTap: (context, controller, details) {
         _toggleBars();
-        return false; // let the viewer also process the tap (e.g. links)
+        return false;
       },
       textSelectionParams: PdfTextSelectionParams(enabled: !_annotating),
       pageOverlaysBuilder: (context, pageRectInViewer, page) {
@@ -474,7 +487,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  /// Lays out pages horizontally for paginated (swipe left/right) mode.
   static PdfPageLayout _horizontalPageLayout(
     List<PdfPage> pages,
     PdfViewerParams params,
@@ -493,14 +505,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     return PdfPageLayout(pageLayouts: rects, documentSize: Size(x, maxH));
   }
 
-  /// Builds the annotation overlay for a single page.
-  ///
-  /// [pageRectInViewer] is the page's Rect in the viewer's coordinate space.
-  /// [page] is the pdfrx PdfPage with width/height in PDF points.
-  ///
-  /// The overlay is sized to [pageRectInViewer.size] so coordinate mapping
-  /// via [toAbsolute] / [toRelative] is exact — the rendered pixel size
-  /// matches what the user sees.
   Widget _buildPageOverlay(
     BuildContext context,
     Rect pageRectInViewer,
@@ -508,6 +512,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   ) {
     final pageSize = pageRectInViewer.size;
     final pageNumber = page.pageNumber;
+    final pdfPageSize = Size(page.width, page.height);
+
     final annotations = ref
         .read(annotationNotifierProvider)
         .where((a) => a.page == pageNumber && !a.isDeleted)
@@ -522,7 +528,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       height: pageSize.height,
       child: Stack(
         children: [
-          // Highlight + note anchor paint — non-interactive.
           if (annotations.isNotEmpty)
             Positioned.fill(
               child: IgnorePointer(
@@ -535,11 +540,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               ),
             ),
 
-          // Note tap targets — tapping shows the note text.
           for (final note in notes)
             _NoteTapTarget(annotation: note, pageSize: pageSize),
 
-          // Gesture handler — only present in annotation mode.
           if (_annotating)
             Positioned.fill(
               child: GestureHandler(
@@ -547,6 +550,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 currentPage: pageNumber,
                 pdfId: widget.pdfPath,
                 activeTool: _activeTool,
+                pdfPageSize: pdfPageSize,
+                sfDocument: _sfDocument,
               ),
             ),
         ],
@@ -562,12 +567,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 }
 
 // ---------------------------------------------------------------------------
-// Annotation overlay helpers (note tap targets + tooltip)
+// Annotation overlay helpers
 // ---------------------------------------------------------------------------
 
-/// A transparent tap target positioned over a note anchor circle.
-///
-/// On tap, shows the note text in a small bottom sheet tooltip.
+/// Tap target for a note annotation, positioned at the badge drawn by
+/// [HighlightPainter] — the top-right corner of the highlight rect.
 class _NoteTapTarget extends StatelessWidget {
   const _NoteTapTarget({required this.annotation, required this.pageSize});
 
@@ -577,12 +581,12 @@ class _NoteTapTarget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rect = annotation.rect!;
-    // Convert relative coords to absolute, then position a tap target.
-    final left = rect.left * pageSize.width - 16;
+    // Badge is drawn at the top-right corner of the highlight band.
+    final left = rect.right * pageSize.width - 16;
     final top = rect.top * pageSize.height - 16;
 
     return Positioned(
-      left: left.clamp(0.0, double.infinity),
+      left: left.clamp(0.0, pageSize.width - 32),
       top: top.clamp(0.0, double.infinity),
       child: GestureDetector(
         onTap: () => _showNoteTooltip(context),
@@ -599,17 +603,25 @@ class _NoteTapTarget extends StatelessWidget {
       context: context,
       showDragHandle: true,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-      builder: (ctx) => _NoteTooltipSheet(text: text, color: annotation.color),
+      builder: (ctx) => _NoteTooltipSheet(
+        text: text,
+        color: annotation.color,
+        selectedText: annotation.selectedText,
+      ),
     );
   }
 }
 
-/// A compact, non-invasive bottom sheet that shows a note's text.
 class _NoteTooltipSheet extends StatelessWidget {
-  const _NoteTooltipSheet({required this.text, required this.color});
+  const _NoteTooltipSheet({
+    required this.text,
+    required this.color,
+    this.selectedText,
+  });
 
   final String text;
   final AnnotationColor color;
+  final String? selectedText;
 
   @override
   Widget build(BuildContext context) {
@@ -617,19 +629,46 @@ class _NoteTooltipSheet extends StatelessWidget {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 4,
-              height: 48,
-              margin: const EdgeInsets.only(right: 12, top: 2),
-              decoration: BoxDecoration(
-                color: color.solid,
-                borderRadius: BorderRadius.circular(2),
+            if (selectedText != null && selectedText!.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                decoration: BoxDecoration(
+                  color: color.overlay,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border(
+                    left: BorderSide(color: color.solid, width: 3),
+                  ),
+                ),
+                child: Text(
+                  selectedText!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontStyle: FontStyle.italic,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+              const SizedBox(height: 12),
+            ],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 4,
+                  height: 48,
+                  margin: const EdgeInsets.only(right: 12, top: 2),
+                  decoration: BoxDecoration(
+                    color: color.solid,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
+              ],
             ),
-            Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
           ],
         ),
       ),
@@ -661,8 +700,6 @@ class _ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Derive a high-contrast text style directly from the reading mode colors
-    // rather than relying on AppBarTheme, which may apply the wrong color.
     final titleStyle = TextStyle(
       fontSize: 16,
       fontWeight: FontWeight.w500,
@@ -799,11 +836,6 @@ class _ActionButton extends StatelessWidget {
 // Reading mode color filter
 // ---------------------------------------------------------------------------
 
-/// Wraps the PDF viewer in a [ColorFilter] to implement reading modes.
-///
-/// - Light: no filter
-/// - Dark: invert + hue-rotate so text becomes white and images look natural
-/// - Sepia: warm amber matrix
 class _ReadingModeFilter extends StatelessWidget {
   const _ReadingModeFilter({required this.mode, required this.child});
 
@@ -811,49 +843,17 @@ class _ReadingModeFilter extends StatelessWidget {
   final Widget child;
 
   static const _darkMatrix = ColorFilter.matrix(<double>[
-    -1,
-    0,
-    0,
-    0,
-    255,
-    0,
-    -1,
-    0,
-    0,
-    255,
-    0,
-    0,
-    -1,
-    0,
-    255,
-    0,
-    0,
-    0,
-    1,
-    0,
+    -1, 0, 0, 0, 255,
+    0, -1, 0, 0, 255,
+    0, 0, -1, 0, 255,
+    0, 0, 0, 1, 0,
   ]);
 
   static const _sepiaMatrix = ColorFilter.matrix(<double>[
-    0.393,
-    0.769,
-    0.189,
-    0,
-    0,
-    0.349,
-    0.686,
-    0.168,
-    0,
-    0,
-    0.272,
-    0.534,
-    0.131,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
+    0.393, 0.769, 0.189, 0, 0,
+    0.349, 0.686, 0.168, 0, 0,
+    0.272, 0.534, 0.131, 0, 0,
+    0, 0, 0, 1, 0,
   ]);
 
   @override
@@ -868,11 +868,6 @@ class _ReadingModeFilter extends StatelessWidget {
 // Side scroll thumb
 // ---------------------------------------------------------------------------
 
-/// A draggable right-edge scroll indicator.
-///
-/// Shows the current position within the document and lets the user drag
-/// to jump to any page. The thumb is always visible but unobtrusive —
-/// 4px wide at rest, expanding to a pill with page number on drag.
 class _SideScrollThumb extends StatefulWidget {
   const _SideScrollThumb({
     required this.currentPage,
@@ -904,7 +899,6 @@ class _SideScrollThumbState extends State<_SideScrollThumb> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final trackHeight = constraints.maxHeight;
-        // Thumb height: at least 32px, proportional to 1/totalPages.
         final thumbH = (trackHeight / widget.totalPages).clamp(32.0, 80.0);
         final maxTop = trackHeight - thumbH;
         final top = (_fraction * maxTop).clamp(0.0, maxTop);
@@ -914,10 +908,8 @@ class _SideScrollThumbState extends State<_SideScrollThumb> {
           onVerticalDragStart: (d) {
             setState(() {
               _dragging = true;
-              _dragFraction = (d.localPosition.dy / trackHeight).clamp(
-                0.0,
-                1.0,
-              );
+              _dragFraction =
+                  (d.localPosition.dy / trackHeight).clamp(0.0, 1.0);
             });
           },
           onVerticalDragUpdate: (d) {
@@ -931,7 +923,6 @@ class _SideScrollThumbState extends State<_SideScrollThumb> {
             width: _dragging ? 48 : 20,
             child: Stack(
               children: [
-                // Track line.
                 Positioned(
                   right: 0,
                   top: 0,
@@ -941,7 +932,6 @@ class _SideScrollThumbState extends State<_SideScrollThumb> {
                     color: theme.colorScheme.outline.withValues(alpha: 0.15),
                   ),
                 ),
-                // Thumb.
                 Positioned(
                   right: 0,
                   top: top,
@@ -1065,10 +1055,6 @@ class _JumpToPageDialog extends StatelessWidget {
 // Bookmark label dialog
 // ---------------------------------------------------------------------------
 
-/// Asks the user for an optional bookmark name.
-///
-/// Pressing Save with an empty field uses the default label.
-/// Pressing Cancel returns null (no bookmark created).
 class _BookmarkLabelDialog extends StatefulWidget {
   const _BookmarkLabelDialog({required this.defaultLabel});
 
@@ -1109,7 +1095,7 @@ class _BookmarkLabelDialogState extends State<_BookmarkLabelDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context), // null = cancelled
+          onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         FilledButton(

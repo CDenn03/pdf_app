@@ -9,21 +9,18 @@ import 'package:pdf_app/core/models/relative_rect_model.dart';
 /// Data access object for annotation CRUD operations.
 ///
 /// All queries filter by `is_deleted = 0` to honor soft-delete semantics.
-/// Never performs hard deletes per architecture spec.
 class AnnotationDao {
   final DatabaseProvider _provider;
 
   AnnotationDao({DatabaseHelper? dbHelper})
     : _provider = dbHelper ?? DatabaseHelper();
 
-  /// Test-only constructor that accepts a raw [Database] instance.
   AnnotationDao.withDatabase(Database db)
     : _provider = _DirectDatabaseProvider(db);
 
   Future<Database> get _db => _provider.database;
 
-  /// Retrieves all non-deleted annotations for a given [pdfId] across
-  /// a range of pages. Used for currentPage ± 1 loading.
+  /// Retrieves all non-deleted annotations for [pdfId] across a page range.
   Future<List<Annotation>> getByPdfAndPageRange(
     String pdfId,
     int startPage,
@@ -39,8 +36,6 @@ class AnnotationDao {
   }
 
   /// Retrieves ALL non-deleted annotations for [pdfId], ordered by page.
-  ///
-  /// Used by the annotation panel to show a full document overview.
   Future<List<Annotation>> getAllForPdf(String pdfId) async {
     final db = await _db;
     final maps = await db.query(
@@ -53,9 +48,6 @@ class AnnotationDao {
   }
 
   /// Inserts or updates an annotation.
-  ///
-  /// Uses `ConflictAlgorithm.replace` so that if an annotation with the
-  /// same UUID already exists, it is updated in place.
   Future<void> upsert(Annotation annotation) async {
     final db = await _db;
     await db.insert(
@@ -66,7 +58,6 @@ class AnnotationDao {
   }
 
   /// Soft-deletes an annotation by setting `is_deleted = 1`.
-  /// Never hard-deletes per architecture spec.
   Future<void> softDelete(String id) async {
     final db = await _db;
     await db.update(
@@ -77,7 +68,9 @@ class AnnotationDao {
     );
   }
 
-  // --- Mapping helpers ---
+  // ---------------------------------------------------------------------------
+  // Mapping
+  // ---------------------------------------------------------------------------
 
   String get _now => DateTime.now().toIso8601String();
 
@@ -91,10 +84,15 @@ class AnnotationDao {
       'rect_left': annotation.rect?.left,
       'rect_bottom': annotation.rect?.bottom,
       'rect_right': annotation.rect?.right,
+      'selected_text': annotation.selectedText,
+      'text_run_start': annotation.textRunStart,
+      'text_run_end': annotation.textRunEnd,
       'text': annotation.text,
       'label': annotation.label,
       'color': annotation.color.name,
       'is_deleted': annotation.isDeleted ? 1 : 0,
+      'coordinate_version': annotation.coordinateVersion,
+      'created_at': annotation.createdAt?.toIso8601String() ?? _now,
       'updated_at': _now,
     };
   }
@@ -119,27 +117,37 @@ class AnnotationDao {
       orElse: () => AnnotationColor.yellow,
     );
 
+    DateTime? createdAt;
+    DateTime? updatedAt;
+    if (map['created_at'] != null) {
+      createdAt = DateTime.tryParse(map['created_at'] as String);
+    }
+    if (map['updated_at'] != null) {
+      updatedAt = DateTime.tryParse(map['updated_at'] as String);
+    }
+
     return Annotation(
       id: map['id'] as String,
       pdfId: map['pdf_id'] as String,
       page: map['page'] as int,
       type: AnnotationType.values.byName(map['type'] as String),
       rect: rect,
+      selectedText: map['selected_text'] as String?,
+      textRunStart: map['text_run_start'] as int?,
+      textRunEnd: map['text_run_end'] as int?,
       text: map['text'] as String?,
       label: map['label'] as String?,
       color: color,
       isDeleted: (map['is_deleted'] as int) == 1,
+      coordinateVersion: (map['coordinate_version'] as int?) ?? 1,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
     );
   }
 }
 
-/// A [DatabaseProvider] that wraps an already-open [Database].
-///
-/// Used by [AnnotationDao.withDatabase] to allow tests to inject an
-/// in-memory database without the nullable field branching.
 class _DirectDatabaseProvider implements DatabaseProvider {
   final Database _db;
-
   _DirectDatabaseProvider(this._db);
 
   @override

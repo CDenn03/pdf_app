@@ -9,13 +9,19 @@ part 'annotation.g.dart';
 
 /// An annotation created by the user on a PDF page.
 ///
-/// Supports highlights, notes, and bookmarks. Rect is nullable because
-/// bookmarks have no spatial extent. Text is nullable because highlights
-/// and bookmarks carry no text content. Soft-deleted annotations are
-/// retained in the database with [isDeleted] set to true.
+/// Supports highlights, notes, and bookmarks. [rect] is nullable because
+/// bookmarks have no spatial extent. [text] is nullable because highlights
+/// and bookmarks carry no note content.
 ///
-/// [label] is an optional user-defined name, used primarily for bookmarks
-/// so they can be identified in the annotations panel.
+/// [selectedText] stores the verbatim text the user highlighted, providing
+/// text-anchoring so annotations survive zoom and rendering changes.
+///
+/// [coordinateVersion] marks which coordinate system the [rect] was captured
+/// in: 1 = legacy (screen pixels / PDF points — unreliable), 2 = normalized
+/// to rendered page size (correct). Pre-v4-migration data is always version 1.
+///
+/// Soft-deleted annotations are retained in the database with [isDeleted] set
+/// to true.
 @freezed
 abstract class Annotation with _$Annotation {
   const factory Annotation({
@@ -24,10 +30,16 @@ abstract class Annotation with _$Annotation {
     required int page,
     required AnnotationType type,
     RelativeRectModel? rect,
+    String? selectedText,
+    int? textRunStart,
+    int? textRunEnd,
     String? text,
     String? label,
     @Default(AnnotationColor.yellow) AnnotationColor color,
     @Default(false) bool isDeleted,
+    @Default(2) int coordinateVersion,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) = _Annotation;
 
   factory Annotation.fromJson(Map<String, dynamic> json) =>

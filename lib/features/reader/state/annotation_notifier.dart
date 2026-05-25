@@ -10,18 +10,16 @@ import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
 import 'package:pdf_app/core/models/relative_rect_model.dart';
 import 'package:pdf_app/core/providers.dart';
-import 'package:pdf_app/core/utils/debounce.dart';
 
 /// Manages annotation state for the currently viewed PDF.
 ///
-/// Only loads annotations for `currentPage ± 1` — never the full document set.
-/// All writes are debounced by 300ms per architecture spec.
+/// Loads annotations for a window of pages around the current page.
+/// In continuous mode callers pass a larger [window] to cover all visible pages.
 ///
-/// Maintains an undo stack of recently added annotation IDs so the user
-/// can reverse accidental highlights or notes without opening the panel.
+/// Writes are immediate — no debounce — so rapid additions are never dropped.
+/// The undo stack is capped at [_maxUndoDepth].
 class AnnotationNotifier extends Notifier<List<Annotation>> {
   late final AnnotationDao _dao;
-  late final Debounce _debounce;
 
   String _currentPdfId = '';
   final _undoStack = <String>[];
@@ -32,26 +30,23 @@ class AnnotationNotifier extends Notifier<List<Annotation>> {
   @override
   List<Annotation> build() {
     _dao = ref.read(annotationDaoProvider);
-    _debounce = Debounce();
-    ref.onDispose(_debounce.dispose);
     return [];
   }
 
-  /// Loads annotations for [page] ± 1 of the given [pdfId].
-  Future<void> loadForPage(String pdfId, int page) async {
+  /// Loads annotations for [page] ± [window] of the given [pdfId].
+  ///
+  /// Pass [window] = 3 in continuous mode so all visible pages are covered.
+  Future<void> loadForPage(String pdfId, int page, {int window = 1}) async {
     if (pdfId != _currentPdfId) {
       _undoStack.clear();
+      _syncCanUndo();
     }
     _currentPdfId = pdfId;
 
-    final startPage = max(1, page - 1);
-    final endPage = page + 1;
+    final startPage = max(1, page - window);
+    final endPage = page + window;
 
-    final annotations = await _dao.getByPdfAndPageRange(
-      pdfId,
-      startPage,
-      endPage,
-    );
+    final annotations = await _dao.getByPdfAndPageRange(pdfId, startPage, endPage);
     state = annotations;
   }
 
@@ -60,11 +55,15 @@ class AnnotationNotifier extends Notifier<List<Annotation>> {
     return _dao.getAllForPdf(pdfId);
   }
 
-  /// Creates a new highlight annotation with a debounced save.
+  /// Creates a new highlight annotation.
+  ///
+  /// [selectedText] is the verbatim text extracted from the PDF at the
+  /// highlighted region, used for text-anchoring across zoom changes.
   void addHighlight({
     required RelativeRectModel rect,
     required int page,
     AnnotationColor color = AnnotationColor.yellow,
+    String? selectedText,
   }) {
     _addAnnotation(
       _buildAnnotation(
@@ -72,16 +71,18 @@ class AnnotationNotifier extends Notifier<List<Annotation>> {
         type: AnnotationType.highlight,
         rect: rect,
         color: color,
+        selectedText: selectedText,
       ),
     );
   }
 
-  /// Creates a new note annotation with a debounced save.
+  /// Creates a new note annotation.
   void addNote({
     required RelativeRectModel rect,
     required String text,
     required int page,
     AnnotationColor color = AnnotationColor.yellow,
+    String? selectedText,
   }) {
     _addAnnotation(
       _buildAnnotation(
@@ -90,14 +91,12 @@ class AnnotationNotifier extends Notifier<List<Annotation>> {
         rect: rect,
         text: text,
         color: color,
+        selectedText: selectedText,
       ),
     );
   }
 
-  /// Creates a new bookmark annotation (no rect) with a debounced save.
-  ///
-  /// [label] is an optional user-defined name shown in the annotations panel.
-  /// Defaults to "Page N" if not provided.
+  /// Creates a new bookmark annotation (no rect).
   void addBookmark({required int page, String? label}) {
     _addAnnotation(
       _buildAnnotation(
@@ -108,20 +107,23 @@ class AnnotationNotifier extends Notifier<List<Annotation>> {
     );
   }
 
-  /// Soft-deletes an annotation. Never hard-deletes per architecture spec.
+  /// Soft-deletes an annotation.
   Future<void> removeAnnotation(String id) async {
     state = state.where((a) => a.id != id).toList();
     _undoStack.remove(id);
+    _syncCanUndo();
     await _dao.softDelete(id);
   }
 
-  /// Undoes the most recently added annotation by soft-deleting it.
+  /// Undoes the most recently added annotation.
   ///
-  /// Returns a description of what was undone, or null if nothing to undo.
+  /// Returns a human-readable description of what was undone, or null if
+  /// there is nothing to undo.
   Future<String?> undo() async {
     if (_undoStack.isEmpty) return null;
 
     final id = _undoStack.removeLast();
+    _syncCanUndo();
 
     final annotation = state.firstWhere(
       (a) => a.id == id,
@@ -144,72 +146,83 @@ class AnnotationNotifier extends Notifier<List<Annotation>> {
     };
   }
 
-  /// Updates an existing annotation's text (for notes).
+  /// Updates an existing note annotation's text.
   void updateNoteText(String id, String newText) {
     state = state.map((a) {
-      if (a.id == id) {
-        final updated = a.copyWith(text: newText);
-        _debouncedSave(updated);
-        return updated;
-      }
-      return a;
+      if (a.id != id) return a;
+      final updated = a.copyWith(text: newText);
+      _saveAsync(updated);
+      return updated;
     }).toList();
   }
 
   /// Updates an existing annotation's color.
   void updateColor(String id, AnnotationColor color) {
     state = state.map((a) {
-      if (a.id == id) {
-        final updated = a.copyWith(color: color);
-        _debouncedSave(updated);
-        return updated;
-      }
-      return a;
+      if (a.id != id) return a;
+      final updated = a.copyWith(color: color);
+      _saveAsync(updated);
+      return updated;
     }).toList();
   }
 
-  /// Returns annotations filtered to a specific [page].
+  /// Returns annotations filtered to a specific [page], excluding deleted ones.
   List<Annotation> annotationsForPage(int page) =>
       state.where((a) => a.page == page && !a.isDeleted).toList();
+
+  // ---------------------------------------------------------------------------
+  // Internal
+  // ---------------------------------------------------------------------------
 
   Annotation _buildAnnotation({
     required int page,
     required AnnotationType type,
     RelativeRectModel? rect,
+    String? selectedText,
     String? text,
     String? label,
     AnnotationColor color = AnnotationColor.yellow,
-  }) => Annotation(
-    id: uuid.v4(),
-    pdfId: _currentPdfId,
-    page: page,
-    type: type,
-    rect: rect,
-    text: text,
-    label: label,
-    color: color,
-  );
+  }) {
+    final now = DateTime.now();
+    return Annotation(
+      id: uuid.v4(),
+      pdfId: _currentPdfId,
+      page: page,
+      type: type,
+      rect: rect,
+      selectedText: selectedText,
+      text: text,
+      label: label,
+      color: color,
+      coordinateVersion: 2,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
 
   void _addAnnotation(Annotation annotation) {
     state = [...state, annotation];
     _undoStack.add(annotation.id);
     if (_undoStack.length > _maxUndoDepth) _undoStack.removeAt(0);
-    _debouncedSave(annotation);
+    _syncCanUndo();
+    _saveAsync(annotation);
   }
 
-  void _debouncedSave(Annotation annotation) {
-    _debounce.run(() async {
-      try {
-        await _dao.upsert(annotation);
-      } catch (e, s) {
-        developer.log(
-          'Failed to save annotation ${annotation.id}',
-          name: 'pdf_app.annotation',
-          level: 1000,
-          error: e,
-          stackTrace: s,
-        );
-      }
+  /// Pushes the current [canUndo] state into [canUndoAnnotationProvider] so
+  /// the toolbar undo button reflects reality.
+  void _syncCanUndo() {
+    ref.read(canUndoAnnotationProvider.notifier).setValue(canUndo);
+  }
+
+  void _saveAsync(Annotation annotation) {
+    _dao.upsert(annotation).catchError((Object e, StackTrace s) {
+      developer.log(
+        'Failed to save annotation ${annotation.id}',
+        name: 'pdf_app.annotation',
+        level: 1000,
+        error: e,
+        stackTrace: s,
+      );
     });
   }
 }

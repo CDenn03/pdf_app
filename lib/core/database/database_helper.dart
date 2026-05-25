@@ -1,18 +1,18 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 
-/// Abstract interface for providing a [Database] instance.
-///
-/// Allows [AnnotationDao] to depend on an abstraction rather than the
-/// concrete [DatabaseHelper], making it testable without a real database.
 abstract class DatabaseProvider {
   Future<Database> get database;
 }
 
-/// Singleton SQLite database helper for the PDF Navigator app.
+/// Singleton SQLite database helper.
 ///
-/// Manages database creation, schema migrations, and provides
-/// a single [Database] instance throughout the app lifecycle.
+/// Schema version history:
+///   v1 — initial schema
+///   v2 — added color column
+///   v3 — added label column
+///   v4 — added selected_text, text_run_start, text_run_end,
+///         coordinate_version, created_at, updated_at columns
 class DatabaseHelper implements DatabaseProvider {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   static Database? _database;
@@ -21,7 +21,6 @@ class DatabaseHelper implements DatabaseProvider {
 
   DatabaseHelper._internal();
 
-  /// Returns the singleton [Database] instance, creating it if necessary.
   @override
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -35,7 +34,7 @@ class DatabaseHelper implements DatabaseProvider {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -52,16 +51,19 @@ class DatabaseHelper implements DatabaseProvider {
         rect_left REAL,
         rect_bottom REAL,
         rect_right REAL,
+        selected_text TEXT,
+        text_run_start INTEGER,
+        text_run_end INTEGER,
         text TEXT,
         label TEXT,
         color TEXT NOT NULL DEFAULT 'yellow',
         is_deleted INTEGER NOT NULL DEFAULT 0,
+        coordinate_version INTEGER NOT NULL DEFAULT 2,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     ''');
 
-    // Required index per architecture spec: indexed (pdf_id, page) queries
     await db.execute('CREATE INDEX idx_pdf_page ON annotations(pdf_id, page)');
   }
 
@@ -73,6 +75,21 @@ class DatabaseHelper implements DatabaseProvider {
     }
     if (oldVersion < 3) {
       await db.execute('ALTER TABLE annotations ADD COLUMN label TEXT');
+    }
+    if (oldVersion < 4) {
+      await db.execute('ALTER TABLE annotations ADD COLUMN selected_text TEXT');
+      await db.execute('ALTER TABLE annotations ADD COLUMN text_run_start INTEGER');
+      await db.execute('ALTER TABLE annotations ADD COLUMN text_run_end INTEGER');
+      // Existing rows get coordinate_version = 1 (legacy broken coordinates).
+      await db.execute(
+        'ALTER TABLE annotations ADD COLUMN coordinate_version INTEGER NOT NULL DEFAULT 1',
+      );
+      await db.execute(
+        "ALTER TABLE annotations ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))",
+      );
+      await db.execute(
+        "ALTER TABLE annotations ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now'))",
+      );
     }
   }
 }
