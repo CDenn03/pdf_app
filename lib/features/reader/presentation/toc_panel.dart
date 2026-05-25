@@ -2,8 +2,8 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:pdfrx/pdfrx.dart' show PdfViewerController;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import 'package:pdf_app/core/services/chapter_extractor.dart';
 import 'package:pdf_app/shared/widgets/overlay_panel.dart';
@@ -28,7 +28,7 @@ Future<void> showTocPanel({
         Navigator.of(ctx).pop();
         Future.delayed(
           const Duration(milliseconds: 300),
-          () => pdfController.jumpToPage(page),
+          () => pdfController.goToPage(pageNumber: page),
         );
       },
     ),
