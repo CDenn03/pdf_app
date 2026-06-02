@@ -5,9 +5,9 @@ import 'app_colors.dart';
 
 /// Centralized theme configuration.
 ///
-/// Uses Inter via google_fonts — neutral, highly readable at small sizes,
-/// clean without being cold. UI typography is intentionally small and
-/// secondary so it never competes with document content.
+/// Fraunces (serif) is used for display/title headings; DM Sans for
+/// all body and UI text. Together they pair the "indie-publisher" warmth
+/// of Fraunces with the crisp legibility of DM Sans.
 abstract final class AppTheme {
   static ThemeData get light => _build(
     brightness: Brightness.light,
@@ -35,20 +35,23 @@ abstract final class AppTheme {
     required Color secondary,
     required Color divider,
   }) {
-    final colorScheme =
-        ColorScheme.fromSeed(
-          seedColor: AppColors.accent,
-          brightness: brightness,
-          surface: surface,
-        ).copyWith(
-          surface: surface,
-          onSurface: onSurface,
-          surfaceContainerHighest: background,
-        );
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: AppColors.brand,
+      brightness: brightness,
+      surface: surface,
+    ).copyWith(
+      primary: AppColors.brand,
+      onPrimary: AppColors.onBrand,
+      secondary: AppColors.ground,
+      onSecondary: AppColors.onBrand,
+      surface: surface,
+      onSurface: onSurface,
+      surfaceContainerHighest: background,
+    );
 
-    final textTheme = GoogleFonts.interTextTheme(
+    // DM Sans for all UI text.
+    final textTheme = GoogleFonts.dmSansTextTheme(
       TextTheme(
-        // UI text is intentionally small and secondary.
         bodyLarge: TextStyle(fontSize: 15, color: onSurface, height: 1.5),
         bodyMedium: TextStyle(fontSize: 14, color: onSurface, height: 1.5),
         bodySmall: TextStyle(fontSize: 12, color: secondary, height: 1.4),
@@ -72,6 +75,30 @@ abstract final class AppTheme {
           fontWeight: FontWeight.w500,
           color: onSurface,
         ),
+        // Fraunces for display/heading styles.
+        displayLarge: GoogleFonts.fraunces(
+          fontSize: 32,
+          fontWeight: FontWeight.w700,
+          color: onSurface,
+          letterSpacing: -0.5,
+        ),
+        displayMedium: GoogleFonts.fraunces(
+          fontSize: 26,
+          fontWeight: FontWeight.w700,
+          color: onSurface,
+          letterSpacing: -0.3,
+        ),
+        headlineLarge: GoogleFonts.fraunces(
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          color: onSurface,
+          letterSpacing: -0.2,
+        ),
+        headlineMedium: GoogleFonts.fraunces(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: onSurface,
+        ),
       ),
     );
 
@@ -82,7 +109,6 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: background,
       dividerColor: divider,
       dividerTheme: DividerThemeData(color: divider, space: 1, thickness: 1),
-      // Flat design — minimal elevation.
       cardTheme: CardThemeData(
         elevation: 0,
         color: surface,
@@ -91,7 +117,6 @@ abstract final class AppTheme {
           side: BorderSide(color: divider),
         ),
       ),
-      // Bottom sheets slide up cleanly.
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
@@ -101,14 +126,12 @@ abstract final class AppTheme {
         dragHandleColor: secondary.withValues(alpha: 0.4),
         dragHandleSize: const Size(40, 4),
       ),
-      // Snackbars are informational, not alarming.
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: onSurface,
         contentTextStyle: TextStyle(color: surface, fontSize: 13),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
-      // Icon buttons use outline style.
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(
           minimumSize: const Size(44, 44),
@@ -120,9 +143,9 @@ abstract final class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: GoogleFonts.dmSans(
           fontSize: 16,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
           color: onSurface,
         ),
         iconTheme: IconThemeData(color: onSurface),
@@ -131,9 +154,9 @@ abstract final class AppTheme {
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        indicatorColor: AppColors.accentMuted,
+        indicatorColor: AppColors.brandTint,
         labelTextStyle: WidgetStateProperty.all(
-          GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500),
+          GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w500),
         ),
       ),
     );

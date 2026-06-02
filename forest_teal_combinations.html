@@ -1,0 +1,146 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.combo { border: 0.5px solid var(--color-border-tertiary); border-radius: 16px; overflow: hidden; margin-bottom: 14px; background: var(--color-background-primary); }
+.combo-header { height: 72px; display: flex; align-items: center; padding: 0 16px; gap: 12px; }
+.combo-swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.25); }
+.combo-body { padding: 14px 16px; }
+.hex-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.hex-chip { border-radius: 8px; padding: 5px 9px; font-size: 10px; font-weight: 500; font-family: var(--font-mono); display: flex; align-items: center; gap: 5px; border: 0.5px solid var(--color-border-tertiary); color: var(--color-text-primary); }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.mini-ui { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.pill { border-radius: 20px; padding: 4px 11px; font-size: 10px; font-weight: 600; }
+.nav-demo { display: flex; gap: 5px; margin-top: 8px; }
+.nav-icon { width: 30px; height: 22px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.vibe-tag { display: inline-block; border-radius: 6px; padding: 3px 8px; font-size: 9px; font-weight: 500; margin-right: 4px; margin-top: 4px; }
+.desc { font-size: 10px; color: var(--color-text-secondary); margin-top: 8px; line-height: 1.5; }
+.role-row { display: flex; gap: 8px; margin-top: 10px; }
+.role-card { flex: 1; border-radius: 10px; padding: 8px 10px; border: 0.5px solid var(--color-border-tertiary); }
+.role-label { font-size: 9px; color: var(--color-text-secondary); margin-bottom: 3px; }
+.role-val { font-size: 11px; font-weight: 500; color: var(--color-text-primary); }
+.rec-pill { font-size: 9px; font-weight: 600; background: #1A1A1A; color: #fff; border-radius: 6px; padding: 2px 8px; margin-left: 8px; vertical-align: middle; }
+</style>
+
+<div style="padding: 0.5rem 0 1.5rem;">
+
+  <!-- Combo 1: Forest primary, Teal secondary -->
+  <div class="combo">
+    <div class="combo-header" style="background: linear-gradient(135deg, #1A3A2A 0%, #0C2A2E 100%);">
+      <div class="combo-swatch" style="background:#1F5C38;"></div>
+      <div class="combo-swatch" style="background:#0E6B72; margin-left:-10px;"></div>
+      <div>
+        <div style="font-size:13px;font-weight:500;color:#fff;">1 — Forest leads, Teal supports</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.6);margin-top:2px;">Primary nav · Secondary actions</div>
+      </div>
+    </div>
+    <div class="combo-body">
+      <div class="hex-row">
+        <div class="hex-chip"><div class="dot" style="background:#1F5C38;"></div>#1F5C38 primary</div>
+        <div class="hex-chip"><div class="dot" style="background:#0E6B72;"></div>#0E6B72 secondary</div>
+        <div class="hex-chip"><div class="dot" style="background:#E8F5ED;"></div>#E8F5ED tint</div>
+      </div>
+      <div class="mini-ui">
+        <div class="pill" style="background:#1F5C38;color:#fff;">Library</div>
+        <div class="pill" style="background:#E8F5ED;color:#0D4A25;">Design</div>
+        <div class="pill" style="background:var(--color-background-secondary);color:var(--color-text-secondary);border:0.5px solid var(--color-border-tertiary);">Books</div>
+      </div>
+      <div class="nav-demo">
+        <div class="nav-icon" style="background:#1F5C38;"><i class="ti ti-books" style="color:#fff;font-size:12px;" aria-hidden="true"></i></div>
+        <div class="nav-icon" style="background:var(--color-background-secondary);"><i class="ti ti-folder" style="color:var(--color-text-tertiary);font-size:12px;" aria-hidden="true"></i></div>
+        <div class="nav-icon" style="background:var(--color-background-secondary);"><i class="ti ti-search" style="color:var(--color-text-tertiary);font-size:12px;" aria-hidden="true"></i></div>
+      </div>
+      <div class="role-row">
+        <div class="role-card">
+          <div class="role-label">Buttons / active nav</div>
+          <div class="role-val" style="color:#1F5C38;">Forest green</div>
+        </div>
+        <div class="role-card">
+          <div class="role-label">Progress bars / links</div>
+          <div class="role-val" style="color:#0E6B72;">Midnight teal</div>
+        </div>
+      </div>
+      <div class="desc">Clean hierarchy. Forest does the heavy lifting for interactive states; teal handles supporting UI like reading progress, hyperlinks, and secondary badges. Feels lush and cohesive.</div>
+    </div>
+  </div>
+
+  <!-- Combo 2: Teal primary, Forest accents — RECOMMENDED -->
+  <div class="combo" style="border-color:#0E6B72;border-width:1.5px;">
+    <div class="combo-header" style="background: linear-gradient(135deg, #0C2A2E 0%, #1A3A2A 100%);">
+      <div class="combo-swatch" style="background:#0E6B72;"></div>
+      <div class="combo-swatch" style="background:#1F5C38; margin-left:-10px;"></div>
+      <div>
+        <div style="font-size:13px;font-weight:500;color:#fff;">2 — Teal leads, Forest grounds <span style="font-size:9px;background:rgba(255,255,255,0.15);border-radius:6px;padding:2px 7px;font-weight:400;margin-left:4px;">Recommended</span></div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.6);margin-top:2px;">Precise · premium · distinctive</div>
+      </div>
+    </div>
+    <div class="combo-body">
+      <div class="hex-row">
+        <div class="hex-chip"><div class="dot" style="background:#0E6B72;"></div>#0E6B72 primary</div>
+        <div class="hex-chip"><div class="dot" style="background:#1F5C38;"></div>#1F5C38 ground</div>
+        <div class="hex-chip"><div class="dot" style="background:#E2F4F5;"></div>#E2F4F5 tint</div>
+        <div class="hex-chip"><div class="dot" style="background:#E8F5ED;"></div>#E8F5ED forest tint</div>
+      </div>
+      <div class="mini-ui">
+        <div class="pill" style="background:#0E6B72;color:#fff;">Library</div>
+        <div class="pill" style="background:#E2F4F5;color:#073D42;">Design</div>
+        <div class="pill" style="background:var(--color-background-secondary);color:var(--color-text-secondary);border:0.5px solid var(--color-border-tertiary);">Books</div>
+      </div>
+      <div class="nav-demo">
+        <div class="nav-icon" style="background:#0E6B72;"><i class="ti ti-books" style="color:#fff;font-size:12px;" aria-hidden="true"></i></div>
+        <div class="nav-icon" style="background:var(--color-background-secondary);"><i class="ti ti-folder" style="color:var(--color-text-tertiary);font-size:12px;" aria-hidden="true"></i></div>
+        <div class="nav-icon" style="background:var(--color-background-secondary);"><i class="ti ti-search" style="color:var(--color-text-tertiary);font-size:12px;" aria-hidden="true"></i></div>
+      </div>
+      <div class="role-row">
+        <div class="role-card">
+          <div class="role-label">Buttons / active nav / links</div>
+          <div class="role-val" style="color:#0E6B72;">Midnight teal</div>
+        </div>
+        <div class="role-card">
+          <div class="role-label">Collection covers / icons</div>
+          <div class="role-val" style="color:#1F5C38;">Forest green</div>
+        </div>
+      </div>
+      <div class="desc">Teal as the interactive accent feels precise and premium — less expected than green. Forest appears in content (collection thumbnails, file icon fills) so it's everywhere but never shouts. The two greens create a rich, layered palette unlike anything else in the App Store.</div>
+    </div>
+  </div>
+
+  <!-- Combo 3: Split by mode -->
+  <div class="combo">
+    <div class="combo-header" style="background: linear-gradient(90deg, #F7F6F2 50%, #0F0F0F 50%);">
+      <div class="combo-swatch" style="background:#1F5C38; border-color:rgba(0,0,0,0.15);"></div>
+      <div class="combo-swatch" style="background:#0E6B72; margin-left:-10px; border-color:rgba(255,255,255,0.2);"></div>
+      <div>
+        <div style="font-size:13px;font-weight:500;color:#1A1A1A;">3 — Split by mode</div>
+        <div style="font-size:10px;color:#888;margin-top:2px;">Forest light · Teal dark</div>
+      </div>
+    </div>
+    <div class="combo-body">
+      <div class="role-row" style="margin-top:0;margin-bottom:10px;">
+        <div class="role-card" style="background:#F7F6F2;">
+          <div class="role-label">Light mode accent</div>
+          <div class="role-val" style="color:#1F5C38;">Forest #1F5C38</div>
+        </div>
+        <div class="role-card" style="background:#1C1C1C;">
+          <div class="role-label" style="color:#666;">Dark mode accent</div>
+          <div class="role-val" style="color:#2DBFC9;">Teal #2DBFC9</div>
+        </div>
+      </div>
+      <div>
+        <span class="vibe-tag" style="background:#E8F5ED;color:#0D4A25;">Adaptive</span>
+        <span class="vibe-tag" style="background:#E2F4F5;color:#073D42;">Clever</span>
+        <span class="vibe-tag" style="background:var(--color-background-secondary);color:var(--color-text-secondary);">Complex</span>
+      </div>
+      <div class="desc">Most adventurous option — the app literally changes personality between day and night. Forest feels warm and natural in daylight; teal glows precisely in the dark. More complex to implement but deeply memorable. Use a lightened teal (#2DBFC9) in dark mode for contrast.</div>
+    </div>
+  </div>
+
+</div>
+<script>
+document.querySelectorAll('.combo').forEach(c => {
+  c.style.cursor = 'pointer';
+  c.addEventListener('click', () => {
+    const title = c.querySelector('[style*="font-size:13px"]').textContent.trim().replace(/Recommended/,'').trim();
+    sendPrompt('Go with combination ' + title);
+  });
+});
+</script>

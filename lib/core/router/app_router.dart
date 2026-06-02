@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:pdf_app/core/constants.dart';
 import 'package:pdf_app/features/home/presentation/home_shell.dart';
+import 'package:pdf_app/features/library/presentation/collection_screen.dart';
 import 'package:pdf_app/features/reader/presentation/reader_page.dart';
 import 'package:pdf_app/features/settings/presentation/settings_page.dart';
 
@@ -12,6 +13,19 @@ final GoRouter appRouter = GoRouter(
       path: '/',
       name: 'home',
       builder: (context, state) => const HomeShell(),
+    ),
+    GoRoute(
+      path: '/favorites',
+      name: 'favorites',
+      builder: (context, state) =>
+          const CollectionScreen(isFavorites: true),
+    ),
+    GoRoute(
+      path: '/collection/:id',
+      name: 'collection',
+      builder: (context, state) => CollectionScreen(
+        collectionId: state.pathParameters['id'],
+      ),
     ),
     GoRoute(
       path: '/reader',

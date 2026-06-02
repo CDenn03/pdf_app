@@ -29,17 +29,25 @@ class OverlayPanel extends StatelessWidget {
   final Widget? trailing;
 
   /// Shows this panel as a modal bottom sheet.
+  ///
+  /// Set [isDismissible] to false to prevent the sheet from being dismissed
+  /// by tapping the scrim or dragging it down — useful for panels like Search
+  /// where the user needs to interact with content behind the sheet while
+  /// keeping the panel open.
   static Future<T?> show<T>({
     required BuildContext context,
     required String title,
     required WidgetBuilder builder,
     Widget? trailing,
+    bool isDismissible = true,
   }) {
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      showDragHandle: true,
+      showDragHandle: isDismissible,
+      isDismissible: isDismissible,
+      enableDrag: isDismissible,
       builder: (ctx) =>
           OverlayPanel(title: title, trailing: trailing, child: builder(ctx)),
     );

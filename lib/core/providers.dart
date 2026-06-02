@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:pdf_app/core/database/annotation_dao.dart';
@@ -63,6 +64,12 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
   /// Updates the global scroll direction and persists it.
   Future<void> setScrollDirection(ScrollDirection direction) async {
     state = state.copyWith(scrollDirection: direction);
+    await ref.read(appSettingsServiceProvider).save(state);
+  }
+
+  /// Updates the app theme mode and persists it.
+  Future<void> setThemeMode(ThemeMode mode) async {
+    state = state.copyWith(themeMode: mode);
     await ref.read(appSettingsServiceProvider).save(state);
   }
 }

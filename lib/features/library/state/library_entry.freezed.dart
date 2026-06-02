@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$LibraryEntry {
 
- String get id; String get name; String get path; FileStatus get status; DateTime? get lastOpenedAt; String? get collectionId;
+ String get id; String get name; String get path; FileStatus get status; DateTime? get lastOpenedAt; String? get collectionId; bool get isFavorite;
 /// Create a copy of LibraryEntry
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $LibraryEntryCopyWith<LibraryEntry> get copyWith => _$LibraryEntryCopyWithImpl<L
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is LibraryEntry&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.path, path) || other.path == path)&&(identical(other.status, status) || other.status == status)&&(identical(other.lastOpenedAt, lastOpenedAt) || other.lastOpenedAt == lastOpenedAt)&&(identical(other.collectionId, collectionId) || other.collectionId == collectionId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is LibraryEntry&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.path, path) || other.path == path)&&(identical(other.status, status) || other.status == status)&&(identical(other.lastOpenedAt, lastOpenedAt) || other.lastOpenedAt == lastOpenedAt)&&(identical(other.collectionId, collectionId) || other.collectionId == collectionId)&&(identical(other.isFavorite, isFavorite) || other.isFavorite == isFavorite));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,path,status,lastOpenedAt,collectionId);
+int get hashCode => Object.hash(runtimeType,id,name,path,status,lastOpenedAt,collectionId,isFavorite);
 
 @override
 String toString() {
-  return 'LibraryEntry(id: $id, name: $name, path: $path, status: $status, lastOpenedAt: $lastOpenedAt, collectionId: $collectionId)';
+  return 'LibraryEntry(id: $id, name: $name, path: $path, status: $status, lastOpenedAt: $lastOpenedAt, collectionId: $collectionId, isFavorite: $isFavorite)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $LibraryEntryCopyWith<$Res>  {
   factory $LibraryEntryCopyWith(LibraryEntry value, $Res Function(LibraryEntry) _then) = _$LibraryEntryCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, String path, FileStatus status, DateTime? lastOpenedAt, String? collectionId
+ String id, String name, String path, FileStatus status, DateTime? lastOpenedAt, String? collectionId, bool isFavorite
 });
 
 
@@ -62,7 +62,7 @@ class _$LibraryEntryCopyWithImpl<$Res>
 
 /// Create a copy of LibraryEntry
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? path = null,Object? status = null,Object? lastOpenedAt = freezed,Object? collectionId = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? path = null,Object? status = null,Object? lastOpenedAt = freezed,Object? collectionId = freezed,Object? isFavorite = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -70,7 +70,8 @@ as String,path: null == path ? _self.path : path // ignore: cast_nullable_to_non
 as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as FileStatus,lastOpenedAt: freezed == lastOpenedAt ? _self.lastOpenedAt : lastOpenedAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,collectionId: freezed == collectionId ? _self.collectionId : collectionId // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,isFavorite: null == isFavorite ? _self.isFavorite : isFavorite // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -155,10 +156,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String path,  FileStatus status,  DateTime? lastOpenedAt,  String? collectionId)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  String path,  FileStatus status,  DateTime? lastOpenedAt,  String? collectionId,  bool isFavorite)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _LibraryEntry() when $default != null:
-return $default(_that.id,_that.name,_that.path,_that.status,_that.lastOpenedAt,_that.collectionId);case _:
+return $default(_that.id,_that.name,_that.path,_that.status,_that.lastOpenedAt,_that.collectionId,_that.isFavorite);case _:
   return orElse();
 
 }
@@ -176,10 +177,10 @@ return $default(_that.id,_that.name,_that.path,_that.status,_that.lastOpenedAt,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String path,  FileStatus status,  DateTime? lastOpenedAt,  String? collectionId)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  String path,  FileStatus status,  DateTime? lastOpenedAt,  String? collectionId,  bool isFavorite)  $default,) {final _that = this;
 switch (_that) {
 case _LibraryEntry():
-return $default(_that.id,_that.name,_that.path,_that.status,_that.lastOpenedAt,_that.collectionId);case _:
+return $default(_that.id,_that.name,_that.path,_that.status,_that.lastOpenedAt,_that.collectionId,_that.isFavorite);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -196,10 +197,10 @@ return $default(_that.id,_that.name,_that.path,_that.status,_that.lastOpenedAt,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String path,  FileStatus status,  DateTime? lastOpenedAt,  String? collectionId)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  String path,  FileStatus status,  DateTime? lastOpenedAt,  String? collectionId,  bool isFavorite)?  $default,) {final _that = this;
 switch (_that) {
 case _LibraryEntry() when $default != null:
-return $default(_that.id,_that.name,_that.path,_that.status,_that.lastOpenedAt,_that.collectionId);case _:
+return $default(_that.id,_that.name,_that.path,_that.status,_that.lastOpenedAt,_that.collectionId,_that.isFavorite);case _:
   return null;
 
 }
@@ -211,7 +212,7 @@ return $default(_that.id,_that.name,_that.path,_that.status,_that.lastOpenedAt,_
 
 
 class _LibraryEntry implements LibraryEntry {
-  const _LibraryEntry({required this.id, required this.name, required this.path, required this.status, this.lastOpenedAt, this.collectionId});
+  const _LibraryEntry({required this.id, required this.name, required this.path, required this.status, this.lastOpenedAt, this.collectionId, this.isFavorite = false});
   
 
 @override final  String id;
@@ -220,6 +221,7 @@ class _LibraryEntry implements LibraryEntry {
 @override final  FileStatus status;
 @override final  DateTime? lastOpenedAt;
 @override final  String? collectionId;
+@override@JsonKey() final  bool isFavorite;
 
 /// Create a copy of LibraryEntry
 /// with the given fields replaced by the non-null parameter values.
@@ -231,16 +233,16 @@ _$LibraryEntryCopyWith<_LibraryEntry> get copyWith => __$LibraryEntryCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _LibraryEntry&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.path, path) || other.path == path)&&(identical(other.status, status) || other.status == status)&&(identical(other.lastOpenedAt, lastOpenedAt) || other.lastOpenedAt == lastOpenedAt)&&(identical(other.collectionId, collectionId) || other.collectionId == collectionId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _LibraryEntry&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.path, path) || other.path == path)&&(identical(other.status, status) || other.status == status)&&(identical(other.lastOpenedAt, lastOpenedAt) || other.lastOpenedAt == lastOpenedAt)&&(identical(other.collectionId, collectionId) || other.collectionId == collectionId)&&(identical(other.isFavorite, isFavorite) || other.isFavorite == isFavorite));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,path,status,lastOpenedAt,collectionId);
+int get hashCode => Object.hash(runtimeType,id,name,path,status,lastOpenedAt,collectionId,isFavorite);
 
 @override
 String toString() {
-  return 'LibraryEntry(id: $id, name: $name, path: $path, status: $status, lastOpenedAt: $lastOpenedAt, collectionId: $collectionId)';
+  return 'LibraryEntry(id: $id, name: $name, path: $path, status: $status, lastOpenedAt: $lastOpenedAt, collectionId: $collectionId, isFavorite: $isFavorite)';
 }
 
 
@@ -251,7 +253,7 @@ abstract mixin class _$LibraryEntryCopyWith<$Res> implements $LibraryEntryCopyWi
   factory _$LibraryEntryCopyWith(_LibraryEntry value, $Res Function(_LibraryEntry) _then) = __$LibraryEntryCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, String path, FileStatus status, DateTime? lastOpenedAt, String? collectionId
+ String id, String name, String path, FileStatus status, DateTime? lastOpenedAt, String? collectionId, bool isFavorite
 });
 
 
@@ -268,7 +270,7 @@ class __$LibraryEntryCopyWithImpl<$Res>
 
 /// Create a copy of LibraryEntry
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? path = null,Object? status = null,Object? lastOpenedAt = freezed,Object? collectionId = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? path = null,Object? status = null,Object? lastOpenedAt = freezed,Object? collectionId = freezed,Object? isFavorite = null,}) {
   return _then(_LibraryEntry(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -276,7 +278,8 @@ as String,path: null == path ? _self.path : path // ignore: cast_nullable_to_non
 as String,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as FileStatus,lastOpenedAt: freezed == lastOpenedAt ? _self.lastOpenedAt : lastOpenedAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,collectionId: freezed == collectionId ? _self.collectionId : collectionId // ignore: cast_nullable_to_non_nullable
-as String?,
+as String?,isFavorite: null == isFavorite ? _self.isFavorite : isFavorite // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

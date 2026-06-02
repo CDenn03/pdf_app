@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf_pdf;
 
@@ -15,6 +16,7 @@ import 'package:pdf_app/core/models/annotation_type.dart';
 import 'package:pdf_app/core/theme/reading_mode.dart';
 import 'package:pdf_app/core/theme/scroll_direction.dart';
 import 'package:pdf_app/features/library/state/library_providers.dart';
+import 'package:pdf_app/features/recents/state/recents_notifier.dart';
 import 'package:pdf_app/features/reader/presentation/annotation_panel.dart';
 import 'package:pdf_app/features/reader/presentation/annotation_toolbar.dart';
 import 'package:pdf_app/features/reader/presentation/gesture_handler.dart';
@@ -70,6 +72,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _scheduleAutoHide();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(libraryEntriesProvider.notifier).recordOpened(widget.pdfPath);
+      ref.read(recentsProvider.notifier).recordOpened(widget.pdfPath);
     });
   }
 
@@ -363,27 +366,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final settings = ref.watch(appSettingsProvider);
     final readingMode = settings.readingMode;
 
-    final Widget? bottomBar;
-    if (_annotating) {
-      bottomBar = AnnotationToolbar(
-        activeTool: _activeTool,
-        onToolChanged: (tool) => setState(() => _activeTool = tool),
-        onExit: _exitAnnotationMode,
-        onUndo: _performUndo,
-        readingMode: readingMode,
-      );
-    } else if (_barsVisible) {
-      bottomBar = _BottomActionBar(
-        onSearch: _openSearch,
-        onAnnotate: _enterAnnotationMode,
-        onToc: _openToc,
-        onMore: _openMore,
-        readingMode: readingMode,
-      );
-    } else {
-      bottomBar = null;
-    }
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -401,20 +383,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 readingMode: readingMode,
               )
             : null,
-        bottomNavigationBar: bottomBar,
-        body: _buildBody(),
+        body: _buildBody(readingMode),
       ),
     );
   }
 
-  Widget _buildBody() {
-    final readingMode = ref.read(appSettingsProvider).readingMode;
+  Widget _buildBody(ReadingMode readingMode) {
+    // Floating pill bar height + margin for page indicator clearance.
+    const barHeight = 60.0;
+    const barMargin = 12.0;
+    final barVisible = _barsVisible && !_annotating;
+    final indicatorBottom = barVisible ? barHeight + barMargin + 8 : 16.0;
+
     return Stack(
       children: [
         _ReadingModeFilter(mode: readingMode, child: _buildViewer()),
 
         Positioned(
-          bottom: 16,
+          bottom: indicatorBottom,
           left: 0,
           right: 0,
           child: Center(
@@ -425,6 +411,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
           ),
         ),
+
+        // Floating annotation toolbar (replaces pill bar while annotating).
+        if (_annotating)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 12 + MediaQuery.of(context).padding.bottom,
+            child: AnnotationToolbar(
+              activeTool: _activeTool,
+              onToolChanged: (tool) => setState(() => _activeTool = tool),
+              onExit: _exitAnnotationMode,
+              onUndo: _performUndo,
+              readingMode: readingMode,
+            ),
+          ),
+
+        // Floating pill action bar.
+        if (barVisible)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: barMargin + MediaQuery.of(context).padding.bottom,
+            child: _BottomActionBar(
+              onSearch: _openSearch,
+              onAnnotate: _enterAnnotationMode,
+              onToc: _openToc,
+              onMore: _openMore,
+              readingMode: readingMode,
+            ),
+          ),
 
         if (_totalPages > 1)
           Positioned(
@@ -443,9 +459,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Widget _buildViewer() {
+    final settings = ref.read(appSettingsProvider);
     final bool isPaginated =
-        ref.read(appSettingsProvider).scrollDirection ==
-        ScrollDirection.paginated;
+        settings.scrollDirection == ScrollDirection.sideBySide ||
+        settings.scrollDirection == ScrollDirection.bookFlip;
+    final readingMode = settings.readingMode;
 
     final params = PdfViewerParams(
       layoutPages: isPaginated ? _horizontalPageLayout : null,
@@ -457,6 +475,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         return false;
       },
       textSelectionParams: PdfTextSelectionParams(enabled: !_annotating),
+      // Pre-compensate highlight colors for the reading mode's color filter
+      // so search matches remain visible in dark and sepia modes.
+      matchTextColor: readingMode.searchMatchColor,
+      activeMatchTextColor: readingMode.searchActiveMatchColor,
       pageOverlaysBuilder: (context, pageRectInViewer, page) {
         return [_buildPageOverlay(context, pageRectInViewer, page)];
       },
@@ -722,6 +744,10 @@ class _ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
 // Bottom action bar
 // ---------------------------------------------------------------------------
 
+/// Floating pill-shaped action bar for the reader.
+///
+/// Mirrors the home shell's nav pill aesthetic while using reading-mode
+/// colours so it blends with light, dark, and sepia backgrounds.
 class _BottomActionBar extends StatelessWidget {
   const _BottomActionBar({
     required this.onSearch,
@@ -739,43 +765,50 @@ class _BottomActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final surface = readingMode.controlSurface.withValues(alpha: 0.92);
+    final borderColor = readingMode.primaryText.withValues(alpha: 0.08);
+
     return Container(
+      height: 60,
       decoration: BoxDecoration(
-        color: readingMode.controlSurface,
-        border: Border(top: BorderSide(color: theme.dividerColor, width: 0.5)),
+        color: surface,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.10),
+            blurRadius: 24,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _ActionButton(
-              icon: Icons.search,
-              label: 'Search',
-              color: readingMode.primaryText,
-              onTap: onSearch,
-            ),
-            _ActionButton(
-              icon: Icons.edit_outlined,
-              label: 'Annotate',
-              color: readingMode.primaryText,
-              onTap: onAnnotate,
-            ),
-            _ActionButton(
-              icon: Icons.list_outlined,
-              label: 'Contents',
-              color: readingMode.primaryText,
-              onTap: onToc,
-            ),
-            _ActionButton(
-              icon: Icons.more_horiz,
-              label: 'More',
-              color: readingMode.primaryText,
-              onTap: onMore,
-            ),
-          ],
-        ),
+      child: Row(
+        children: [
+          _ActionButton(
+            icon: Icons.search,
+            label: 'Search',
+            color: readingMode.primaryText,
+            onTap: onSearch,
+          ),
+          _ActionButton(
+            icon: Icons.edit_outlined,
+            label: 'Annotate',
+            color: readingMode.primaryText,
+            onTap: onAnnotate,
+          ),
+          _ActionButton(
+            icon: Icons.list_outlined,
+            label: 'Contents',
+            color: readingMode.primaryText,
+            onTap: onToc,
+          ),
+          _ActionButton(
+            icon: Icons.more_horiz,
+            label: 'More',
+            color: readingMode.primaryText,
+            onTap: onMore,
+          ),
+        ],
       ),
     );
   }
@@ -796,21 +829,20 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(28),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 22, color: color),
-            const SizedBox(height: 3),
+            Icon(icon, size: 20, color: color),
+            const SizedBox(height: 2),
             Text(
               label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontSize: 11,
+              style: GoogleFonts.dmSans(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
                 color: color,
               ),
             ),

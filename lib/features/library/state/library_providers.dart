@@ -49,6 +49,7 @@ class LibraryNotifier extends Notifier<List<LibraryEntry>> {
           status: status,
           lastOpenedAt: e.lastOpenedAt,
           collectionId: e.collectionId,
+          isFavorite: e.isFavorite,
         );
       }),
     );
@@ -100,6 +101,22 @@ class LibraryNotifier extends Notifier<List<LibraryEntry>> {
   Future<void> moveToCollection(String entryId, String? collectionId) async {
     state = state.map((e) {
       return e.id == entryId ? e.copyWith(collectionId: collectionId) : e;
+    }).toList();
+    await _persist();
+  }
+
+  /// Toggles the favorite status of an entry.
+  Future<void> toggleFavorite(String id) async {
+    state = state.map((e) {
+      return e.id == id ? e.copyWith(isFavorite: !e.isFavorite) : e;
+    }).toList();
+    await _persist();
+  }
+
+  /// Renames a library entry (display name only; does not rename the file).
+  Future<void> renameFile(String id, String newName) async {
+    state = state.map((e) {
+      return e.id == id ? e.copyWith(name: newName) : e;
     }).toList();
     await _persist();
   }

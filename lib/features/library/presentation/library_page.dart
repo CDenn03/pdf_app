@@ -1,159 +1,159 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:pdf_app/core/models/collection.dart';
 import 'package:pdf_app/core/models/file_status.dart';
+import 'package:pdf_app/core/theme/app_colors.dart';
+import 'package:pdf_app/features/home/presentation/home_shell.dart';
 import 'package:pdf_app/features/library/state/library_entry.dart';
 import 'package:pdf_app/features/library/state/library_providers.dart';
+import 'package:pdf_app/features/recents/state/recents_notifier.dart';
 
-/// The Library tab — only files the user has explicitly added.
 class LibraryPage extends ConsumerStatefulWidget {
-  const LibraryPage({super.key, this.searchQuery = ''});
+  const LibraryPage({
+    super.key,
+    this.bottomPadding = 0,
+    this.onAddToCollection,
+  });
 
-  final String searchQuery;
+  final double bottomPadding;
+  final void Function(String collectionId)? onAddToCollection;
 
   @override
   ConsumerState<LibraryPage> createState() => _LibraryPageState();
 }
 
 class _LibraryPageState extends ConsumerState<LibraryPage> {
-  final _expandedCollections = <String>{};
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() => _query = '');
+  }
 
   @override
   Widget build(BuildContext context) {
     final entries = ref.watch(libraryEntriesProvider);
     final collections = ref.watch(collectionsProvider);
-    final q = widget.searchQuery.toLowerCase().trim();
+    final recents = ref.watch(recentsProvider);
+    final q = _query.toLowerCase().trim();
+    final searching = q.isNotEmpty;
+    final results = searching
+        ? entries.where((e) => e.name.toLowerCase().contains(q)).toList()
+        : const <LibraryEntry>[];
 
-    if (q.isNotEmpty) {
-      final filtered = entries
-          .where((e) => e.name.toLowerCase().contains(q))
-          .toList();
-      if (filtered.isEmpty) return _EmptySearch(query: widget.searchQuery);
-      return _EntryList(entries: filtered);
-    }
-
-    final uncollected = entries.where((e) => e.collectionId == null).toList();
-
-    if (entries.isEmpty) {
-      return const _EmptyLibrary();
-    }
-
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        for (final col in collections) ...[
-          _CollectionHeader(
-            collection: col,
-            expanded: _expandedCollections.contains(col.id),
-            onToggle: () => setState(() {
-              if (_expandedCollections.contains(col.id)) {
-                _expandedCollections.remove(col.id);
-              } else {
-                _expandedCollections.add(col.id);
-              }
-            }),
-            onRename: () => _renameCollection(context, col),
-            onDelete: () => _deleteCollection(context, col),
+    return PopScope(
+      canPop: !searching,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _clearSearch();
+      },
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: GreetingHeader(subtitle: timeGreeting, title: 'Library'),
           ),
-          if (_expandedCollections.contains(col.id))
-            ...entries
-                .where((e) => e.collectionId == col.id)
-                .map(
-                  (e) => Padding(
-                    padding: const EdgeInsets.only(left: 16),
-                    child: _EntryTile(entry: e),
+          SliverToBoxAdapter(
+            child: PageSearchBar(
+              controller: _searchController,
+              onChanged: (v) => setState(() => _query = v),
+              hintText: 'Search library…',
+            ),
+          ),
+          if (searching) ...[
+            if (results.isEmpty)
+              SliverFillRemaining(
+                child: Center(
+                  child: Text(
+                    'No results for "$q"',
+                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
                 ),
-        ],
-        if (uncollected.isNotEmpty) ...[
-          if (collections.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-              child: Text(
-                'Files',
-                style: Theme.of(context).textTheme.labelMedium,
+              )
+            else
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (_, i) => _EntryTile(entry: results[i]),
+                  childCount: results.length,
+                ),
+              ),
+          ] else ...[
+            if (recents.isNotEmpty)
+              SliverToBoxAdapter(
+                child: _RecentFilesSection(
+                  recents: recents.take(6).toList(),
+                ),
+              ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'COLLECTIONS',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? AppColors.darkSecondaryText
+                              : AppColors.lightSecondaryText,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => _createCollection(context),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('New'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.brand,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        textStyle: GoogleFonts.dmSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ...uncollected.map((e) => _EntryTile(entry: e)),
-        ],
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-          child: OutlinedButton.icon(
-            onPressed: () => _createCollection(context),
-            icon: const Icon(Icons.create_new_folder_outlined, size: 18),
-            label: const Text('New collection'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _createCollection(BuildContext context) async {
-    final name = await _showNameDialog(context, title: 'New collection');
-    if (name == null || name.trim().isEmpty) return;
-    ref.read(collectionsProvider.notifier).addCollection(name.trim());
-  }
-
-  Future<void> _renameCollection(
-    BuildContext context,
-    PdfCollection col,
-  ) async {
-    final name = await _showNameDialog(
-      context,
-      title: 'Rename collection',
-      initial: col.name,
-    );
-    if (name == null || name.trim().isEmpty) return;
-    ref
-        .read(collectionsProvider.notifier)
-        .renameCollection(col.id, name.trim());
-  }
-
-  Future<void> _deleteCollection(
-    BuildContext context,
-    PdfCollection col,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete collection?'),
-        content: Text(
-          'Files in "${col.name}" will be moved to the root library.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              sliver: _CollectionGrid(
+                collections: collections,
+                entries: entries,
+                onAddToCollection: widget.onAddToCollection,
+              ),
+            ),
+            if (entries.isEmpty && collections.isEmpty && recents.isEmpty)
+              SliverFillRemaining(
+                child: _EmptyHome(bottomPadding: widget.bottomPadding),
+              ),
+          ],
+          SliverToBoxAdapter(
+            child: SizedBox(height: widget.bottomPadding + 8),
           ),
         ],
       ),
     );
-    if (confirmed != true) return;
-    final entries = ref.read(libraryEntriesProvider);
-    for (final e in entries.where((e) => e.collectionId == col.id)) {
-      await ref
-          .read(libraryEntriesProvider.notifier)
-          .moveToCollection(e.id, null);
-    }
-    ref.read(collectionsProvider.notifier).deleteCollection(col.id);
   }
 
-  Future<String?> _showNameDialog(
-    BuildContext context, {
-    required String title,
-    String initial = '',
-  }) {
-    final ctrl = TextEditingController(text: initial);
-    return showDialog<String>(
+  Future<void> _createCollection(BuildContext context) async {
+    final ctrl = TextEditingController();
+    final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(title),
+        title: const Text('New collection'),
         content: TextField(
           controller: ctrl,
           autofocus: true,
@@ -170,237 +170,286 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text),
-            child: const Text('Save'),
+            child: const Text('Create'),
           ),
         ],
       ),
     );
+    if (name == null || name.trim().isEmpty) return;
+    ref.read(collectionsProvider.notifier).addCollection(name.trim());
   }
 }
 
-class _EntryList extends StatelessWidget {
-  const _EntryList({required this.entries});
+// ---------------------------------------------------------------------------
+// Recently opened horizontal strip
+// ---------------------------------------------------------------------------
 
-  final List<LibraryEntry> entries;
+class _RecentFilesSection extends ConsumerWidget {
+  const _RecentFilesSection({required this.recents});
 
-  @override
-  Widget build(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 24),
-      itemCount: entries.length,
-      itemBuilder: (_, i) => _EntryTile(entry: entries[i]),
-    );
-  }
-}
-
-class _EntryTile extends ConsumerWidget {
-  const _EntryTile({required this.entry});
-
-  final LibraryEntry entry;
+  final List<RecentEntry> recents;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final unavailable = entry.status != FileStatus.ok;
-    final theme = Theme.of(context);
-    final collections = ref.watch(collectionsProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final secondary =
+        isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: unavailable
-              ? theme.colorScheme.surfaceContainerHighest
-              : theme.colorScheme.primaryContainer,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(
-          Icons.picture_as_pdf_outlined,
-          size: 20,
-          color: unavailable
-              ? theme.colorScheme.outline
-              : theme.colorScheme.primary,
-        ),
-      ),
-      title: Text(
-        entry.name,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: unavailable ? theme.colorScheme.outline : null,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: unavailable
-          ? Text(
-              'File unavailable',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
-            )
-          : null,
-      trailing: PopupMenuButton<_EntryAction>(
-        icon: Icon(Icons.more_vert, size: 18, color: theme.colorScheme.outline),
-        onSelected: (action) =>
-            _handleAction(context, ref, action, collections),
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: _EntryAction.open, child: Text('Open')),
-          PopupMenuItem(
-            value: _EntryAction.move,
-            child: Text('Move to collection'),
-          ),
-          PopupMenuItem(
-            value: _EntryAction.remove,
-            child: Text('Remove from library'),
-          ),
-        ],
-      ),
-      onTap: unavailable
-          ? null
-          : () {
-              ref
-                  .read(libraryEntriesProvider.notifier)
-                  .recordOpened(entry.path);
-              context.go('/reader', extra: entry.path);
-            },
-    );
-  }
-
-  Future<void> _handleAction(
-    BuildContext context,
-    WidgetRef ref,
-    _EntryAction action,
-    List<PdfCollection> collections,
-  ) async {
-    switch (action) {
-      case _EntryAction.open:
-        ref.read(libraryEntriesProvider.notifier).recordOpened(entry.path);
-        if (context.mounted) context.go('/reader', extra: entry.path);
-      case _EntryAction.move:
-        await _showMoveDialog(context, ref, collections);
-      case _EntryAction.remove:
-        ref.read(libraryEntriesProvider.notifier).removeFile(entry.id);
-    }
-  }
-
-  Future<void> _showMoveDialog(
-    BuildContext context,
-    WidgetRef ref,
-    List<PdfCollection> collections,
-  ) async {
-    final selected = await showDialog<String?>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('Move to collection'),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, ''),
-            child: const Text('Root library'),
-          ),
-          for (final col in collections)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, col.id),
-              child: Text(col.name),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+          child: Text(
+            'RECENTLY OPENED',
+            style: GoogleFonts.dmSans(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: secondary,
+              letterSpacing: 0.8,
             ),
-        ],
-      ),
+          ),
+        ),
+        SizedBox(
+          height: 136,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            itemCount: recents.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (_, i) =>
+                _RecentCard(entry: recents[i], colorIndex: i),
+          ),
+        ),
+        const SizedBox(height: 4),
+      ],
     );
-    if (selected == null) return;
-    ref
-        .read(libraryEntriesProvider.notifier)
-        .moveToCollection(entry.id, selected.isEmpty ? null : selected);
   }
 }
 
-enum _EntryAction { open, move, remove }
+class _RecentCard extends ConsumerWidget {
+  const _RecentCard({required this.entry, required this.colorIndex});
 
-class _CollectionHeader extends StatelessWidget {
-  const _CollectionHeader({
-    required this.collection,
-    required this.expanded,
-    required this.onToggle,
-    required this.onRename,
-    required this.onDelete,
+  final RecentEntry entry;
+  final int colorIndex;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+    final border = isDark ? AppColors.darkDivider : AppColors.lightDivider;
+    final secondary =
+        isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
+    final primary =
+        isDark ? AppColors.darkPrimaryText : AppColors.lightPrimaryText;
+    final gradient = AppColors.coverGradientAt(colorIndex);
+
+    return GestureDetector(
+      onTap: () {
+        ref.read(recentsProvider.notifier).recordOpened(entry.path);
+        context.push('/reader', extra: entry.path);
+      },
+      child: Container(
+        width: 96,
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: gradient,
+                  ),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(13),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.picture_as_pdf_outlined,
+                  size: 28,
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.name.replaceAll('.pdf', ''),
+                    style: GoogleFonts.dmSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: primary,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    _timeAgo(entry.openedAt),
+                    style: GoogleFonts.dmSans(fontSize: 10, color: secondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Collection grid: Favorites card first, then user collections (asymmetric)
+// ---------------------------------------------------------------------------
+
+class _CollectionGrid extends StatelessWidget {
+  const _CollectionGrid({
+    required this.collections,
+    required this.entries,
+    this.onAddToCollection,
   });
 
-  final PdfCollection collection;
-  final bool expanded;
-  final VoidCallback onToggle;
-  final VoidCallback onRename;
-  final VoidCallback onDelete;
+  final List<PdfCollection> collections;
+  final List<LibraryEntry> entries;
+  final void Function(String id)? onAddToCollection;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-      leading: Icon(
-        expanded ? Icons.folder_open_outlined : Icons.folder_outlined,
-        color: theme.colorScheme.primary,
+    final favCount = entries.where((e) => e.isFavorite).length;
+
+    // Build card list: favorites first, then collections
+    final cards = <Widget>[
+      _FavoritesCard(count: favCount),
+      ...collections.map(
+        (col) => _CollectionCard(
+          collection: col,
+          count: entries.where((e) => e.collectionId == col.id).length,
+          colorIndex: collections.indexOf(col) + 1,
+          onAdd: onAddToCollection != null
+              ? () => onAddToCollection!(col.id)
+              : null,
+        ),
       ),
-      title: Text(collection.name, style: theme.textTheme.bodyMedium),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            expanded ? Icons.expand_less : Icons.expand_more,
-            size: 20,
-            color: theme.colorScheme.outline,
-          ),
-          PopupMenuButton<_CollectionAction>(
-            icon: Icon(
-              Icons.more_vert,
-              size: 18,
-              color: theme.colorScheme.outline,
-            ),
-            onSelected: (a) {
-              if (a == _CollectionAction.rename) onRename();
-              if (a == _CollectionAction.delete) onDelete();
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: _CollectionAction.rename,
-                child: Text('Rename'),
-              ),
-              PopupMenuItem(
-                value: _CollectionAction.delete,
-                child: Text('Delete'),
-              ),
-            ],
-          ),
-        ],
+    ];
+
+    // Lay out in rows of 2, alternating which side is wider (asymmetric)
+    final rows = <Widget>[];
+    for (int i = 0; i < cards.length; i += 2) {
+      final left = cards[i];
+      final right = i + 1 < cards.length ? cards[i + 1] : null;
+      final swapped = (i ~/ 2) % 2 == 1;
+
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: right == null
+              ? left
+              : IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: swapped
+                        ? [
+                            Expanded(flex: 2, child: right),
+                            const SizedBox(width: 10),
+                            Expanded(flex: 3, child: left),
+                          ]
+                        : [
+                            Expanded(flex: 3, child: left),
+                            const SizedBox(width: 10),
+                            Expanded(flex: 2, child: right),
+                          ],
+                  ),
+                ),
+        ),
+      );
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (_, i) => rows[i],
+        childCount: rows.length,
       ),
-      onTap: onToggle,
     );
   }
 }
 
-enum _CollectionAction { rename, delete }
+class _FavoritesCard extends StatelessWidget {
+  const _FavoritesCard({required this.count});
 
-class _EmptyLibrary extends StatelessWidget {
-  const _EmptyLibrary();
+  final int count;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+    final border = isDark ? AppColors.darkDivider : AppColors.lightDivider;
+    final secondary =
+        isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
+    final primary =
+        isDark ? AppColors.darkPrimaryText : AppColors.lightPrimaryText;
+
+    return GestureDetector(
+      onTap: () => context.push('/favorites'),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 120),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: border),
+        ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(
-              Icons.collections_bookmark_outlined,
-              size: 48,
-              color: theme.colorScheme.outline,
+            Container(
+              height: 72,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF8B0000), Color(0xFFCC2936)],
+                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.favorite, size: 32, color: Colors.white),
             ),
-            const SizedBox(height: 16),
-            Text('Your library is empty', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              'Tap + to add PDFs, or browse the Device tab to find files on your phone.',
-              style: theme.textTheme.bodySmall,
-              textAlign: TextAlign.center,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Favorites',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: primary,
+                    ),
+                  ),
+                  Text(
+                    '$count file${count == 1 ? '' : 's'}',
+                    style: GoogleFonts.dmSans(fontSize: 11, color: secondary),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -409,23 +458,393 @@ class _EmptyLibrary extends StatelessWidget {
   }
 }
 
-class _EmptySearch extends StatelessWidget {
-  const _EmptySearch({required this.query});
+class _CollectionCard extends ConsumerWidget {
+  const _CollectionCard({
+    required this.collection,
+    required this.count,
+    required this.colorIndex,
+    this.onAdd,
+  });
 
-  final String query;
+  final PdfCollection collection;
+  final int count;
+  final int colorIndex;
+  final VoidCallback? onAdd;
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
+  Future<void> _onLongPress(BuildContext context, WidgetRef ref) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off, size: 48, color: theme.colorScheme.outline),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Rename'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _rename(context, ref);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Delete'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _delete(context, ref);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _rename(BuildContext context, WidgetRef ref) async {
+    final ctrl = TextEditingController(text: collection.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename collection'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (_) => Navigator.pop(ctx, ctrl.text),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.trim().isEmpty) return;
+    ref.read(collectionsProvider.notifier).renameCollection(
+          collection.id,
+          name.trim(),
+        );
+  }
+
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete collection?'),
+        content: Text(
+          '"${collection.name}" will be deleted. Files will not be removed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    ref.read(collectionsProvider.notifier).deleteCollection(collection.id);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+    final border = isDark ? AppColors.darkDivider : AppColors.lightDivider;
+    final secondary =
+        isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
+    final primary =
+        isDark ? AppColors.darkPrimaryText : AppColors.lightPrimaryText;
+    final gradient = AppColors.coverGradientAt(colorIndex);
+
+    return GestureDetector(
+      onTap: () => context.push('/collection/${collection.id}'),
+      onLongPress: () => _onLongPress(context, ref),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 120),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              height: 72,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: gradient,
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(15),
+                ),
+              ),
+              child: Stack(
+                children: [
+                  const Center(
+                    child: Icon(
+                      Icons.collections_bookmark_outlined,
+                      size: 28,
+                      color: Colors.white70,
+                    ),
+                  ),
+                  if (onAdd != null)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: GestureDetector(
+                        onTap: onAdd,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(7),
+                          ),
+                          child: const Icon(
+                            Icons.add,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    collection.name,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: primary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    '$count file${count == 1 ? '' : 's'}',
+                    style: GoogleFonts.dmSans(fontSize: 11, color: secondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Entry tile (used in search results)
+// ---------------------------------------------------------------------------
+
+class _EntryTile extends ConsumerWidget {
+  const _EntryTile({required this.entry});
+
+  final LibraryEntry entry;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final secondary =
+        isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
+    final primary =
+        isDark ? AppColors.darkPrimaryText : AppColors.lightPrimaryText;
+    final colorIndex = entry.path.hashCode.abs();
+    final gradient = AppColors.coverGradientAt(colorIndex);
+    final unavailable = entry.status != FileStatus.ok;
+
+    final collections = ref.watch(collectionsProvider);
+    final collectionName = entry.collectionId != null
+        ? collections
+            .where((c) => c.id == entry.collectionId)
+            .map((c) => c.name)
+            .firstOrNull
+        : null;
+
+    // Subtitle: collection name and/or favourite tag
+    final tags = [
+      ?collectionName,
+      if (entry.isFavorite) 'Favorite',
+    ];
+
+    void open() {
+      if (unavailable) return;
+      ref.read(libraryEntriesProvider.notifier).recordOpened(entry.path);
+      ref.read(recentsProvider.notifier).recordOpened(entry.path);
+      context.push('/reader', extra: entry.path);
+    }
+
+    void showMenu() {
+      showModalBottomSheet<void>(
+        context: context,
+        builder: (_) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!unavailable)
+                ListTile(
+                  leading: const Icon(Icons.open_in_new_outlined),
+                  title: const Text('Open'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    open();
+                  },
+                ),
+              if (entry.isFavorite)
+                ListTile(
+                  leading:
+                      Icon(Icons.favorite, color: AppColors.brand, size: 20),
+                  title: const Text('Show in Favorites'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push('/favorites');
+                  },
+                ),
+              if (collectionName != null)
+                ListTile(
+                  leading: const Icon(
+                    Icons.collections_bookmark_outlined,
+                  ),
+                  title: Text('Show in "$collectionName"'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push('/collection/${entry.collectionId}');
+                  },
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return InkWell(
+      onTap: unavailable ? null : open,
+      onLongPress: showMenu,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                gradient: unavailable
+                    ? null
+                    : LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: gradient,
+                      ),
+                color: unavailable
+                    ? (isDark
+                        ? AppColors.darkSurface
+                        : const Color(0xFFEEEEEE))
+                    : null,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.picture_as_pdf_outlined,
+                size: 20,
+                color: unavailable
+                    ? secondary
+                    : Colors.white.withValues(alpha: 0.9),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.name,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: unavailable ? secondary : primary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (tags.isNotEmpty)
+                    Text(
+                      tags.join(' · '),
+                      style: GoogleFonts.dmSans(
+                        fontSize: 12,
+                        color: secondary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (entry.isFavorite)
+              Icon(Icons.favorite, size: 14, color: AppColors.brand),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Empty state
+// ---------------------------------------------------------------------------
+
+class _EmptyHome extends StatelessWidget {
+  const _EmptyHome({required this.bottomPadding});
+
+  final double bottomPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final secondary =
+        isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(32, 32, 32, bottomPadding + 32),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.collections_bookmark_outlined,
+              size: 52,
+              color: secondary,
+            ),
             const SizedBox(height: 16),
-            Text('No results for "$query"', style: theme.textTheme.titleMedium),
+            Text(
+              'Your library is empty',
+              style: theme.textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Go to Device tab to add PDFs.',
+              style: theme.textTheme.bodyMedium?.copyWith(color: secondary),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),

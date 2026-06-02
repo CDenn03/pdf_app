@@ -38,8 +38,29 @@ dev_dependencies:
   freezed: ^3.2.5
   json_serializable: ^6.9.0
   mocktail: ^1.0.4
+  flutter_native_splash: ^2.4.7
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
   assets:
     - assets/
+
+flutter_native_splash:
+  # Brand teal background — matches the Flutter SplashScreen widget.
+  color: "#0E6B72"
+  color_dark: "#073D42"
+
+  # Centered logo drawn on the native splash.
+  image: assets/splash_logo.png
+  image_dark: assets/splash_logo.png
+
+  # Fill the entire screen (no letterboxing on Android 12+).
+  fullscreen: true
+
+  android_12:
+    # Android 12+ uses the new SplashScreen API — same brand teal.
+    color: "#0E6B72"
+    color_dark: "#073D42"
+    image: assets/splash_logo.png
+    image_dark: assets/splash_logo.png

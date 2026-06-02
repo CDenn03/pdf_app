@@ -22,6 +22,7 @@ class PersistedEntry {
   final String path;
   final DateTime? lastOpenedAt;
   final String? collectionId;
+  final bool isFavorite;
 
   const PersistedEntry({
     required this.id,
@@ -29,6 +30,7 @@ class PersistedEntry {
     required this.path,
     this.lastOpenedAt,
     this.collectionId,
+    this.isFavorite = false,
   });
 
   factory PersistedEntry.fromJson(Map<String, dynamic> json) => PersistedEntry(
@@ -39,6 +41,7 @@ class PersistedEntry {
         ? DateTime.tryParse(json['lastOpenedAt'] as String)
         : null,
     collectionId: json['collectionId'] as String?,
+    isFavorite: json['isFavorite'] as bool? ?? false,
   );
 
   Map<String, dynamic> toJson() => {
@@ -47,6 +50,7 @@ class PersistedEntry {
     'path': path,
     if (lastOpenedAt != null) 'lastOpenedAt': lastOpenedAt!.toIso8601String(),
     if (collectionId != null) 'collectionId': collectionId,
+    if (isFavorite) 'isFavorite': isFavorite,
   };
 }
 
@@ -87,6 +91,7 @@ class LibraryPersistenceService implements LibraryPersistence {
               path: e.path,
               lastOpenedAt: e.lastOpenedAt,
               collectionId: e.collectionId,
+              isFavorite: e.isFavorite,
             ).toJson(),
           )
           .toList();

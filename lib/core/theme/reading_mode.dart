@@ -46,4 +46,31 @@ extension ReadingModeX on ReadingMode {
     ReadingMode.dark => const Color(0x0AFFD43B),
     ReadingMode.sepia => const Color(0x0AFFD43B),
   };
+
+  /// Search match highlight color, pre-compensated for the reading mode's
+  /// color filter so the highlight is always visible after the filter is
+  /// applied.
+  ///
+  /// Dark mode inverts colors (R' = 255 - R), so we invert the target yellow
+  /// (0xFFFFE066, alpha 0x80) → blue (0xFF001F99, alpha 0x80).
+  /// Sepia mode desaturates toward warm tones, so we use a vivid cyan that
+  /// survives the matrix and reads as a visible teal highlight.
+  /// Light mode needs no compensation.
+  Color get searchMatchColor => switch (this) {
+    ReadingMode.light => const Color(0x80FFE066),
+    ReadingMode.dark => const Color(0x80001F99),
+    ReadingMode.sepia => const Color(0x8000CFCF),
+  };
+
+  /// Active (current) search match highlight color, pre-compensated for the
+  /// reading mode's color filter.
+  ///
+  /// Target is a vivid orange (0xFFFF8C00, alpha 0x99) in light mode.
+  /// Dark inversion: 0xFF007FFF (blue-orange complement).
+  /// Sepia: vivid magenta survives the warm desaturation matrix.
+  Color get searchActiveMatchColor => switch (this) {
+    ReadingMode.light => const Color(0x99FF8C00),
+    ReadingMode.dark => const Color(0x99007FFF),
+    ReadingMode.sepia => const Color(0x99CC00CC),
+  };
 }

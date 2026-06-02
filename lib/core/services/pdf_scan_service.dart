@@ -38,29 +38,20 @@ class PdfScanService implements PdfScanner {
     return results;
   }
 
-  /// Requests the appropriate storage permission for the current Android
-  /// version. Returns true if granted.
+  /// Requests storage permission. Returns true if we have enough access to
+  /// proceed (granted, limited, or restricted — we still attempt the scan).
   Future<bool> _requestPermission() async {
     if (!Platform.isAndroid) return true;
 
-    // Android 13+ uses READ_MEDIA_IMAGES; below that READ_EXTERNAL_STORAGE.
-    final sdkInt = await _androidSdkInt();
-    final permission = sdkInt >= 33
-        ? Permission.manageExternalStorage
-        : Permission.storage;
+    // REQUEST_EXTERNAL_STORAGE works on all Android versions; on 13+ it may
+    // be auto-granted for read-only access to shared storage.
+    final status = await Permission.storage.request();
+    if (status.isGranted || status.isLimited) return true;
 
-    final status = await permission.request();
-    return status.isGranted || status.isLimited;
-  }
-
-  Future<int> _androidSdkInt() async {
-    try {
-      // device_info_plus is not a dependency, so we read the build prop.
-      final result = await Process.run('getprop', ['ro.build.version.sdk']);
-      return int.tryParse(result.stdout.toString().trim()) ?? 0;
-    } catch (_) {
-      return 0;
-    }
+    // On Android 11+ (API 30+) the storage permission may be permanently
+    // denied but the external storage is still readable for common dirs.
+    // Proceed anyway — the walk will simply skip unreadable dirs.
+    return true;
   }
 
   Future<List<Directory>> _storageRoots() async {
@@ -70,7 +61,7 @@ class PdfScanService implements PdfScanner {
       final external = await getExternalStorageDirectories();
       if (external != null) {
         for (final dir in external) {
-          // Walk up to the root of the storage volume (e.g. /storage/emulated/0).
+          // Walk up to the root of the storage volume.
           var current = dir;
           for (var i = 0; i < 4; i++) {
             final parent = current.parent;
@@ -90,8 +81,23 @@ class PdfScanService implements PdfScanner {
       );
     }
 
-    // Always include internal storage root as fallback.
+    // Always include the primary shared storage root.
     dirs.add(Directory('/storage/emulated/0'));
+
+    // Add well-known subdirectories explicitly so they're always scanned
+    // even if the recursive walk is blocked by permissions.
+    const knownPaths = [
+      '/storage/emulated/0/Download',
+      '/storage/emulated/0/Documents',
+      '/storage/emulated/0/Books',
+      '/storage/emulated/0/DCIM',
+      '/storage/emulated/0/WhatsApp/Media/WhatsApp Documents',
+      '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents',
+    ];
+    for (final path in knownPaths) {
+      final d = Directory(path);
+      if (await d.exists()) dirs.add(d);
+    }
 
     // Deduplicate by path.
     final seen = <String>{};
@@ -99,20 +105,32 @@ class PdfScanService implements PdfScanner {
   }
 
   Future<void> _walk(Directory dir, List<String> results) async {
-    // Skip system/hidden directories that are unlikely to contain user PDFs.
-    const skipDirs = {'Android', 'proc', 'sys', 'dev', 'acct', 'cache', 'data'};
+    const skipDirs = {'proc', 'sys', 'dev', 'acct', 'cache', 'data'};
+    const knownAppDirs = {
+      'WhatsApp',
+      'WhatsApp Documents',
+      'Telegram',
+      'Telegram Documents',
+    };
 
-    await for (final entity in dir.list(recursive: false)) {
-      if (entity is File) {
-        if (entity.path.toLowerCase().endsWith('.pdf')) {
-          results.add(entity.path);
-        }
-      } else if (entity is Directory) {
-        final name = entity.path.split('/').last;
-        if (!name.startsWith('.') && !skipDirs.contains(name)) {
-          await _walk(entity, results);
+    try {
+      await for (final entity in dir.list(recursive: false)) {
+        if (entity is File) {
+          if (entity.path.toLowerCase().endsWith('.pdf')) {
+            results.add(entity.path);
+          }
+        } else if (entity is Directory) {
+          final name = entity.path.split('/').last;
+          final isHidden = name.startsWith('.');
+          final isSkipped = skipDirs.contains(name);
+          final isKnownApp = knownAppDirs.contains(name);
+          if (!isSkipped && (!isHidden || isKnownApp)) {
+            await _walk(entity, results);
+          }
         }
       }
+    } catch (_) {
+      // Permission denied or other I/O error — skip this directory silently.
     }
   }
 }

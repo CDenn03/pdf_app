@@ -17,5 +17,6 @@ abstract class LibraryEntry with _$LibraryEntry {
     required FileStatus status,
     DateTime? lastOpenedAt,
     String? collectionId,
+    @Default(false) bool isFavorite,
   }) = _LibraryEntry;
 }

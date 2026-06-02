@@ -92,9 +92,11 @@ class _MorePanelContent extends StatelessWidget {
                     isActive: isActive,
                     onTap: () => onScrollDirectionChanged(dir),
                     leading: Icon(
-                      dir == ScrollDirection.paginated
-                          ? Icons.swap_horiz
-                          : Icons.swap_vert,
+                      switch (dir) {
+                        ScrollDirection.sideBySide => Icons.swap_horiz,
+                        ScrollDirection.bookFlip => Icons.menu_book_outlined,
+                        ScrollDirection.continuous => Icons.swap_vert,
+                      },
                       size: 16,
                       color: isActive
                           ? theme.colorScheme.primary

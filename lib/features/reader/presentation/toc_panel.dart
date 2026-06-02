@@ -138,16 +138,18 @@ class _TocPanelContentState extends State<_TocPanelContent> {
 
     if (_loading) {
       return const Padding(
-        padding: EdgeInsets.all(48),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator.adaptive(),
-              SizedBox(height: 16),
-              Text('Detecting chapters…'),
-            ],
-          ),
+        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+            ),
+            SizedBox(width: 12),
+            Text('Detecting chapters…'),
+          ],
         ),
       );
     }

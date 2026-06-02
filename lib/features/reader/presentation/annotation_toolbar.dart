@@ -34,12 +34,23 @@ class AnnotationToolbar extends ConsumerWidget {
     final canUndo = ref.watch(canUndoAnnotationProvider);
 
     return Container(
-      color: readingMode.controlSurface,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: Row(
+      height: 60,
+      decoration: BoxDecoration(
+        color: readingMode.controlSurface.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: readingMode.primaryText.withValues(alpha: 0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.10),
+            blurRadius: 24,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
             children: [
               // Tool buttons — each gets equal space, text truncates if needed.
               Expanded(
@@ -105,9 +116,7 @@ class AnnotationToolbar extends ConsumerWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
+        );
   }
 }
 

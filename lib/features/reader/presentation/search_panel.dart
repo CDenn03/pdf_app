@@ -4,6 +4,9 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:pdf_app/shared/widgets/overlay_panel.dart';
 
 /// Shows the in-document text search panel as a bottom sheet.
+///
+/// The sheet is non-dismissible so the user can scroll the PDF to see
+/// highlighted matches without accidentally closing the panel.
 Future<void> showSearchPanel({
   required BuildContext context,
   required PdfViewerController pdfController,
@@ -11,6 +14,7 @@ Future<void> showSearchPanel({
   return OverlayPanel.show(
     context: context,
     title: 'Search',
+    isDismissible: false,
     builder: (ctx) => _SearchPanelContent(pdfController: pdfController),
   );
 }
