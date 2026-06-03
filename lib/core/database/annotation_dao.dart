@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:sqflite/sqflite.dart';
 
 import 'package:pdf_app/core/database/database_helper.dart';
@@ -80,68 +82,51 @@ class AnnotationDao {
       'pdf_id': annotation.pdfId,
       'page': annotation.page,
       'type': annotation.type.name,
-      'rect_top': annotation.rect?.top,
-      'rect_left': annotation.rect?.left,
-      'rect_bottom': annotation.rect?.bottom,
-      'rect_right': annotation.rect?.right,
+      'rects': jsonEncode(
+        annotation.rects.map((r) => r.toJson()).toList(),
+      ),
       'selected_text': annotation.selectedText,
-      'text_run_start': annotation.textRunStart,
-      'text_run_end': annotation.textRunEnd,
       'text': annotation.text,
       'label': annotation.label,
       'color': annotation.color.name,
       'is_deleted': annotation.isDeleted ? 1 : 0,
-      'coordinate_version': annotation.coordinateVersion,
+      'pdf_fingerprint': annotation.pdfFingerprint,
       'created_at': annotation.createdAt?.toIso8601String() ?? _now,
       'updated_at': _now,
     };
   }
 
   Annotation _fromMap(Map<String, dynamic> map) {
-    RelativeRectModel? rect;
-    if (map['rect_top'] != null &&
-        map['rect_left'] != null &&
-        map['rect_bottom'] != null &&
-        map['rect_right'] != null) {
-      rect = RelativeRectModel(
-        top: (map['rect_top'] as num).toDouble(),
-        left: (map['rect_left'] as num).toDouble(),
-        bottom: (map['rect_bottom'] as num).toDouble(),
-        right: (map['rect_right'] as num).toDouble(),
-      );
-    }
+    final rectsJson =
+        jsonDecode(map['rects'] as String? ?? '[]') as List<dynamic>;
+    final rects = rectsJson
+        .cast<Map<String, dynamic>>()
+        .map(RelativeRectModel.fromJson)
+        .toList();
 
-    final colorName = map['color'] as String? ?? 'yellow';
     final color = AnnotationColor.values.firstWhere(
-      (c) => c.name == colorName,
+      (c) => c.name == (map['color'] as String? ?? 'yellow'),
       orElse: () => AnnotationColor.yellow,
     );
-
-    DateTime? createdAt;
-    DateTime? updatedAt;
-    if (map['created_at'] != null) {
-      createdAt = DateTime.tryParse(map['created_at'] as String);
-    }
-    if (map['updated_at'] != null) {
-      updatedAt = DateTime.tryParse(map['updated_at'] as String);
-    }
 
     return Annotation(
       id: map['id'] as String,
       pdfId: map['pdf_id'] as String,
       page: map['page'] as int,
       type: AnnotationType.values.byName(map['type'] as String),
-      rect: rect,
+      rects: rects,
       selectedText: map['selected_text'] as String?,
-      textRunStart: map['text_run_start'] as int?,
-      textRunEnd: map['text_run_end'] as int?,
       text: map['text'] as String?,
       label: map['label'] as String?,
       color: color,
       isDeleted: (map['is_deleted'] as int) == 1,
-      coordinateVersion: (map['coordinate_version'] as int?) ?? 1,
-      createdAt: createdAt,
-      updatedAt: updatedAt,
+      pdfFingerprint: map['pdf_fingerprint'] as String?,
+      createdAt: map['created_at'] != null
+          ? DateTime.tryParse(map['created_at'] as String)
+          : null,
+      updatedAt: map['updated_at'] != null
+          ? DateTime.tryParse(map['updated_at'] as String)
+          : null,
     );
   }
 }

@@ -14,9 +14,9 @@ final readerNotifierProvider = NotifierProvider<ReaderNotifier, ReaderState>(
   ReaderNotifier.new,
 );
 
-/// Provider for annotation state.
-/// Only loads annotations for currentPage ± window.
+/// Provider for annotation state, page-indexed.
+/// Use [AnnotationNotifier.annotationsForPage] to read a single page.
 final annotationNotifierProvider =
-    NotifierProvider<AnnotationNotifier, List<Annotation>>(
+    NotifierProvider<AnnotationNotifier, Map<int, List<Annotation>>>(
       AnnotationNotifier.new,
     );

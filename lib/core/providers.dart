@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:pdf_app/core/database/annotation_dao.dart';
 import 'package:pdf_app/core/database/database_helper.dart';
+import 'package:pdf_app/core/database/note_entry_dao.dart';
 import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/services/app_settings_service.dart';
 import 'package:pdf_app/core/services/file_service.dart';
@@ -18,6 +19,10 @@ final databaseHelperProvider = Provider<DatabaseHelper>((ref) {
 
 final annotationDaoProvider = Provider<AnnotationDao>((ref) {
   return AnnotationDao(dbHelper: ref.watch(databaseHelperProvider));
+});
+
+final noteEntryDaoProvider = Provider<NoteEntryDao>((ref) {
+  return NoteEntryDao(dbHelper: ref.watch(databaseHelperProvider));
 });
 
 final fileServiceProvider = Provider<FileChecker>((ref) {

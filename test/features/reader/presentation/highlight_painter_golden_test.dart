@@ -18,12 +18,11 @@ Annotation _highlight(
     pdfId: 'pdf',
     page: 1,
     type: AnnotationType.highlight,
-    rect: rect,
+    rects: [rect],
     color: color,
   );
 }
 
-/// Renders [HighlightPainter] in isolation at a fixed size on a white canvas.
 Widget _buildPainter({
   required List<Annotation> annotations,
   Size pageSize = const Size(400, 600),
@@ -48,11 +47,8 @@ Widget _buildPainter({
 
 void main() {
   group('HighlightPainter golden tests', () {
-    testWidgets('renders nothing when annotations list is empty', (
-      tester,
-    ) async {
+    testWidgets('renders nothing when annotations list is empty', (tester) async {
       await tester.pumpWidget(_buildPainter(annotations: const []));
-
       await expectLater(
         find.byKey(_painterKey),
         matchesGoldenFile('goldens/highlight_painter_empty.png'),
@@ -63,18 +59,12 @@ void main() {
       await tester.pumpWidget(
         _buildPainter(
           annotations: [
-            _highlight(
-              const RelativeRectModel(
-                left: 0.1,
-                top: 0.1,
-                right: 0.9,
-                bottom: 0.2,
-              ),
-            ),
+            _highlight(const RelativeRectModel(
+              left: 0.1, top: 0.1, right: 0.9, bottom: 0.2,
+            )),
           ],
         ),
       );
-
       await expectLater(
         find.byKey(_painterKey),
         matchesGoldenFile('goldens/highlight_painter_single.png'),
@@ -85,69 +75,46 @@ void main() {
       await tester.pumpWidget(
         _buildPainter(
           annotations: [
+            _highlight(const RelativeRectModel(
+              left: 0.1, top: 0.1, right: 0.9, bottom: 0.18,
+            )),
             _highlight(
               const RelativeRectModel(
-                left: 0.1,
-                top: 0.1,
-                right: 0.9,
-                bottom: 0.18,
-              ),
-            ),
-            _highlight(
-              const RelativeRectModel(
-                left: 0.1,
-                top: 0.3,
-                right: 0.7,
-                bottom: 0.38,
+                left: 0.1, top: 0.3, right: 0.7, bottom: 0.38,
               ),
               color: AnnotationColor.green,
             ),
             _highlight(
               const RelativeRectModel(
-                left: 0.2,
-                top: 0.5,
-                right: 0.8,
-                bottom: 0.58,
+                left: 0.2, top: 0.5, right: 0.8, bottom: 0.58,
               ),
               color: AnnotationColor.blue,
             ),
           ],
         ),
       );
-
       await expectLater(
         find.byKey(_painterKey),
         matchesGoldenFile('goldens/highlight_painter_multiple.png'),
       );
     });
 
-    testWidgets('renders overlapping highlights with additive alpha', (
-      tester,
-    ) async {
+    testWidgets('renders overlapping highlights', (tester) async {
       await tester.pumpWidget(
         _buildPainter(
           annotations: [
+            _highlight(const RelativeRectModel(
+              left: 0.1, top: 0.1, right: 0.6, bottom: 0.3,
+            )),
             _highlight(
               const RelativeRectModel(
-                left: 0.1,
-                top: 0.1,
-                right: 0.6,
-                bottom: 0.3,
-              ),
-            ),
-            _highlight(
-              const RelativeRectModel(
-                left: 0.4,
-                top: 0.2,
-                right: 0.9,
-                bottom: 0.4,
+                left: 0.4, top: 0.2, right: 0.9, bottom: 0.4,
               ),
               color: AnnotationColor.pink,
             ),
           ],
         ),
       );
-
       await expectLater(
         find.byKey(_painterKey),
         matchesGoldenFile('goldens/highlight_painter_overlapping.png'),
@@ -158,18 +125,12 @@ void main() {
       await tester.pumpWidget(
         _buildPainter(
           annotations: [
-            _highlight(
-              const RelativeRectModel(
-                left: 0.0,
-                top: 0.45,
-                right: 1.0,
-                bottom: 0.55,
-              ),
-            ),
+            _highlight(const RelativeRectModel(
+              left: 0.0, top: 0.45, right: 1.0, bottom: 0.55,
+            )),
           ],
         ),
       );
-
       await expectLater(
         find.byKey(_painterKey),
         matchesGoldenFile('goldens/highlight_painter_full_width.png'),

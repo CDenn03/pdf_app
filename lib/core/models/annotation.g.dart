@@ -11,19 +11,19 @@ _Annotation _$AnnotationFromJson(Map<String, dynamic> json) => _Annotation(
   pdfId: json['pdfId'] as String,
   page: (json['page'] as num).toInt(),
   type: $enumDecode(_$AnnotationTypeEnumMap, json['type']),
-  rect: json['rect'] == null
-      ? null
-      : RelativeRectModel.fromJson(json['rect'] as Map<String, dynamic>),
+  rects:
+      (json['rects'] as List<dynamic>?)
+          ?.map((e) => RelativeRectModel.fromJson(e as Map<String, dynamic>))
+          .toList() ??
+      const [],
   selectedText: json['selectedText'] as String?,
-  textRunStart: (json['textRunStart'] as num?)?.toInt(),
-  textRunEnd: (json['textRunEnd'] as num?)?.toInt(),
   text: json['text'] as String?,
   label: json['label'] as String?,
   color:
       $enumDecodeNullable(_$AnnotationColorEnumMap, json['color']) ??
       AnnotationColor.yellow,
   isDeleted: json['isDeleted'] as bool? ?? false,
-  coordinateVersion: (json['coordinateVersion'] as num?)?.toInt() ?? 2,
+  pdfFingerprint: json['pdfFingerprint'] as String?,
   createdAt: json['createdAt'] == null
       ? null
       : DateTime.parse(json['createdAt'] as String),
@@ -38,15 +38,13 @@ Map<String, dynamic> _$AnnotationToJson(_Annotation instance) =>
       'pdfId': instance.pdfId,
       'page': instance.page,
       'type': _$AnnotationTypeEnumMap[instance.type]!,
-      'rect': instance.rect,
+      'rects': instance.rects,
       'selectedText': instance.selectedText,
-      'textRunStart': instance.textRunStart,
-      'textRunEnd': instance.textRunEnd,
       'text': instance.text,
       'label': instance.label,
       'color': _$AnnotationColorEnumMap[instance.color]!,
       'isDeleted': instance.isDeleted,
-      'coordinateVersion': instance.coordinateVersion,
+      'pdfFingerprint': instance.pdfFingerprint,
       'createdAt': instance.createdAt?.toIso8601String(),
       'updatedAt': instance.updatedAt?.toIso8601String(),
     };

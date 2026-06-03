@@ -13,6 +13,7 @@ import 'package:pdf_app/core/constants.dart';
 import 'package:pdf_app/core/models/annotation.dart' as app;
 import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
+import 'package:pdf_app/core/models/note_entry.dart';
 import 'package:pdf_app/core/theme/reading_mode.dart';
 import 'package:pdf_app/core/theme/scroll_direction.dart';
 import 'package:pdf_app/features/library/state/library_providers.dart';
@@ -220,24 +221,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // ---------------------------------------------------------------------------
 
   void _updateBookmarkState() {
-    final annotations = ref.read(annotationNotifierProvider);
+    final annotations = ref
+        .read(annotationNotifierProvider.notifier)
+        .annotationsForPage(_currentPage);
     _currentPageBookmarked = annotations.any(
-      (a) =>
-          a.page == _currentPage &&
-          a.type == AnnotationType.bookmark &&
-          !a.isDeleted,
+      (a) => a.type == AnnotationType.bookmark,
     );
   }
 
   void _toggleBookmark() {
     _scheduleAutoHide();
     if (_currentPageBookmarked) {
-      final annotations = ref.read(annotationNotifierProvider);
+      final annotations = ref
+          .read(annotationNotifierProvider.notifier)
+          .annotationsForPage(_currentPage);
       final bookmark = annotations.firstWhere(
-        (a) =>
-            a.page == _currentPage &&
-            a.type == AnnotationType.bookmark &&
-            !a.isDeleted,
+        (a) => a.type == AnnotationType.bookmark,
         orElse: () => const app.Annotation(
           id: '',
           pdfId: '',
@@ -315,6 +314,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       context: context,
       pdfController: _pdfController,
       document: _sfDocument,
+      pdfId: widget.pdfPath,
     ).then((_) => _showBars());
   }
 
@@ -526,12 +526,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final pdfPageSize = Size(page.width, page.height);
 
     final annotations = ref
-        .read(annotationNotifierProvider)
-        .where((a) => a.page == pageNumber && !a.isDeleted)
+        .watch(annotationNotifierProvider.select((m) => m[pageNumber] ?? []))
+        .where((a) => !a.isDeleted)
         .toList();
 
     final notes = annotations
-        .where((a) => a.type == AnnotationType.note && a.rect != null)
+        .where((a) => a.type == AnnotationType.note && a.rects.isNotEmpty)
         .toList();
 
     return SizedBox(
@@ -551,9 +551,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               ),
             ),
 
-          for (final note in notes)
-            _NoteTapTarget(annotation: note, pageSize: pageSize),
-
           if (_annotating)
             Positioned.fill(
               child: GestureHandler(
@@ -563,8 +560,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 activeTool: _activeTool,
                 pdfPageSize: pdfPageSize,
                 sfDocument: _sfDocument,
+                onAddBookmark: _addBookmarkWithLabel,
               ),
             ),
+
+          // Note tap targets must sit above GestureHandler so existing
+          // note badges intercept taps before the gesture handler does.
+          for (final note in notes)
+            _NoteTapTarget(annotation: note, pageSize: pageSize),
         ],
       ),
     );
@@ -581,8 +584,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 // Annotation overlay helpers
 // ---------------------------------------------------------------------------
 
-/// Tap target for a note annotation, positioned at the badge drawn by
-/// [HighlightPainter] — the top-right corner of the highlight rect.
+/// Tap target for a note annotation marker on the page edge.
+///
+/// Positioned to match the tab drawn by [HighlightPainter._paintNote].
 class _NoteTapTarget extends StatelessWidget {
   const _NoteTapTarget({required this.annotation, required this.pageSize});
 
@@ -591,99 +595,225 @@ class _NoteTapTarget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rect = annotation.rect!;
-    // Badge is drawn at the top-right corner of the highlight band.
-    final left = rect.right * pageSize.width - 16;
-    final top = rect.top * pageSize.height - 16;
+    final pos = annotation.rects.first;
+    final isLeftEdge = pos.left < 0.5;
+    const tabWidth = 20.0;
+    const tabHeight = 28.0;
+    final verticalCenter = pos.top * pageSize.height;
 
     return Positioned(
-      left: left.clamp(0.0, pageSize.width - 32),
-      top: top.clamp(0.0, double.infinity),
+      left: isLeftEdge ? 0.0 : null,
+      right: isLeftEdge ? null : 0.0,
+      top: (verticalCenter - tabHeight / 2).clamp(0.0, double.infinity),
       child: GestureDetector(
-        onTap: () => _showNoteTooltip(context),
-        child: const SizedBox(width: 32, height: 32),
+        onTap: () => _showNoteSheet(context),
+        child: const SizedBox(width: tabWidth, height: tabHeight),
       ),
     );
   }
 
-  void _showNoteTooltip(BuildContext context) {
-    final text = annotation.text ?? '';
-    if (text.isEmpty) return;
-
+  void _showNoteSheet(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-      builder: (ctx) => _NoteTooltipSheet(
-        text: text,
-        color: annotation.color,
-        selectedText: annotation.selectedText,
+      builder: (ctx) => _NoteMarkerSheet(annotation: annotation),
+    );
+  }
+}
+
+class _NoteMarkerSheet extends ConsumerStatefulWidget {
+  const _NoteMarkerSheet({required this.annotation});
+
+  final app.Annotation annotation;
+
+  @override
+  ConsumerState<_NoteMarkerSheet> createState() => _NoteMarkerSheetState();
+}
+
+class _NoteMarkerSheetState extends ConsumerState<_NoteMarkerSheet> {
+  List<NoteEntry>? _entries;
+  final _controller = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final entries = await ref
+        .read(annotationNotifierProvider.notifier)
+        .loadNoteEntries(widget.annotation.id);
+    if (mounted) setState(() => _entries = entries);
+  }
+
+  Future<void> _addEntry() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _saving = true);
+    await ref
+        .read(annotationNotifierProvider.notifier)
+        .addNoteEntry(widget.annotation.id, text);
+    _controller.clear();
+    await _load();
+    if (mounted) setState(() => _saving = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = widget.annotation.color;
+    final entries = _entries;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 4,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: color.solid,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('Note', style: theme.textTheme.titleSmall),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (entries == null)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator.adaptive(),
+              ),
+            )
+          else if (entries.isEmpty)
+            Text(
+              'No entries yet.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            )
+          else
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: entries.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (_, i) => _NoteEntryTile(
+                  entry: entries[i],
+                  color: color,
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  maxLines: 3,
+                  minLines: 1,
+                  decoration: InputDecoration(
+                    hintText: 'Add a note…',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    contentPadding: const EdgeInsets.all(10),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                onPressed: _saving ? null : _addEntry,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator.adaptive(
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.send_rounded, size: 18),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
-class _NoteTooltipSheet extends StatelessWidget {
-  const _NoteTooltipSheet({
-    required this.text,
-    required this.color,
-    this.selectedText,
-  });
+class _NoteEntryTile extends StatelessWidget {
+  const _NoteEntryTile({required this.entry, required this.color});
 
-  final String text;
+  final NoteEntry entry;
   final AnnotationColor color;
-  final String? selectedText;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (selectedText != null && selectedText!.isNotEmpty) ...[
-              Container(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                decoration: BoxDecoration(
-                  color: color.overlay,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border(
-                    left: BorderSide(color: color.solid, width: 3),
-                  ),
-                ),
-                child: Text(
-                  selectedText!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontStyle: FontStyle.italic,
-                  ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            Row(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 3,
+            height: 40,
+            margin: const EdgeInsets.only(right: 10, top: 2),
+            decoration: BoxDecoration(
+              color: color.solid,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 4,
-                  height: 48,
-                  margin: const EdgeInsets.only(right: 12, top: 2),
-                  decoration: BoxDecoration(
-                    color: color.solid,
-                    borderRadius: BorderRadius.circular(2),
+                Text(entry.text, style: theme.textTheme.bodyMedium),
+                const SizedBox(height: 2),
+                Text(
+                  _formatTime(entry.createdAt),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  String _formatTime(DateTime dt) {
+    final local = dt.toLocal();
+    final h = local.hour.toString().padLeft(2, '0');
+    final m = local.minute.toString().padLeft(2, '0');
+    return '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}  $h:$m';
   }
 }
 

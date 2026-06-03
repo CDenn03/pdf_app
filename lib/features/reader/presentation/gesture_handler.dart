@@ -30,6 +30,7 @@ class GestureHandler extends ConsumerStatefulWidget {
     required this.currentPage,
     required this.pdfId,
     required this.activeTool,
+    required this.onAddBookmark,
     this.pdfPageSize = Size.zero,
     this.sfDocument,
   });
@@ -39,6 +40,7 @@ class GestureHandler extends ConsumerStatefulWidget {
   final int currentPage;
   final String pdfId;
   final AnnotationTool activeTool;
+  final Future<void> Function() onAddBookmark;
   final PdfDocument? sfDocument;
 
   @override
@@ -69,15 +71,18 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
     final end = _dragCurrent;
 
     if (start != null && end != null) {
-      final rect = Rect.fromPoints(start, end);
-      if (rect.width > 10 && rect.height > 4) {
-        final relRect = toRelative(rect, widget.pageSize);
-        final selectedText = _extractText(relRect);
+      final dragRect = Rect.fromPoints(start, end);
+      if (dragRect.width > 10 && dragRect.height > 4) {
+        final (rects, text) = _extractWordRectsAndText(dragRect);
+        // Fall back to the drag rect itself when text extraction is unavailable.
+        final finalRects = rects.isNotEmpty
+            ? rects
+            : [toRelative(dragRect, widget.pageSize)];
         ref.read(annotationNotifierProvider.notifier).addHighlight(
-          rect: relRect,
+          rects: finalRects,
           page: widget.currentPage,
           color: _activeColor,
-          selectedText: selectedText,
+          selectedText: text,
         );
       }
     }
@@ -88,25 +93,24 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
     });
   }
 
-  /// Extracts the text words that overlap [relRect] using Syncfusion's
-  /// PdfTextExtractor.
+  /// Returns (wordRects, selectedText) for words overlapping [dragRect].
   ///
-  /// [relRect] is in normalized [0,1] coords relative to the rendered page.
-  /// We convert it to PDF user-space by multiplying by [pdfPageSize].
-  ///
-  /// Returns null silently if the document has no extractable text (scanned
-  /// or image-only PDF), or if extraction throws for any reason.
-  String? _extractText(RelativeRectModel relRect) {
+  /// Word bounds from Syncfusion are in PDF user-space points; we normalise
+  /// each to [0,1] relative to [pdfPageSize] so they are renderer-independent.
+  /// Falls back to ([], null) for image-only PDFs or on extraction failure.
+  (List<RelativeRectModel>, String?) _extractWordRectsAndText(Rect dragRect) {
     final doc = widget.sfDocument;
-    if (doc == null) return null;
+    if (doc == null) return ([], null);
 
     final pdf = widget.pdfPageSize;
-    if (pdf == Size.zero) return null;
+    if (pdf == Size.zero) return ([], null);
 
-    final pdfLeft = relRect.left * pdf.width;
-    final pdfTop = relRect.top * pdf.height;
-    final pdfRight = relRect.right * pdf.width;
-    final pdfBottom = relRect.bottom * pdf.height;
+    // Convert screen drag rect to PDF user-space for overlap testing.
+    final screenRel = toRelative(dragRect, widget.pageSize);
+    final pdfLeft = screenRel.left * pdf.width;
+    final pdfTop = screenRel.top * pdf.height;
+    final pdfRight = screenRel.right * pdf.width;
+    final pdfBottom = screenRel.bottom * pdf.height;
 
     try {
       final extractor = PdfTextExtractor(doc);
@@ -115,7 +119,9 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
         endPageIndex: widget.currentPage - 1,
       );
 
+      final rects = <RelativeRectModel>[];
       final words = <String>[];
+
       for (final line in lines) {
         for (final word in line.wordCollection) {
           final b = word.bounds;
@@ -123,10 +129,19 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
               b.left + b.width > pdfLeft &&
               b.top < pdfBottom &&
               b.top + b.height > pdfTop;
-          if (overlaps) words.add(word.text);
+          if (!overlaps) continue;
+          words.add(word.text);
+          rects.add(
+            RelativeRectModel(
+              left: b.left / pdf.width,
+              top: b.top / pdf.height,
+              right: (b.left + b.width) / pdf.width,
+              bottom: (b.top + b.height) / pdf.height,
+            ),
+          );
         }
       }
-      return words.isEmpty ? null : words.join(' ');
+      return (rects, words.isEmpty ? null : words.join(' '));
     } catch (e, s) {
       developer.log(
         'Text extraction failed on page ${widget.currentPage}',
@@ -135,7 +150,7 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
         error: e,
         stackTrace: s,
       );
-      return null;
+      return ([], null);
     }
   }
 
@@ -154,31 +169,26 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
     final text = await _showNoteInput();
     if (text == null || text.isEmpty) return;
 
-    const anchorSize = 24.0;
-    final absoluteRect = Rect.fromCenter(
-      center: position,
-      width: anchorSize,
-      height: anchorSize,
+    // Determine which edge: left half of page → left edge (left=0.0),
+    // right half → right edge (left=1.0). top = vertical fraction.
+    final isLeftEdge = position.dx < widget.pageSize.width / 2;
+    final edgePosition = RelativeRectModel(
+      left: isLeftEdge ? 0.0 : 1.0,
+      top: (position.dy / widget.pageSize.height).clamp(0.0, 1.0),
+      right: isLeftEdge ? 0.0 : 1.0,
+      bottom: (position.dy / widget.pageSize.height).clamp(0.0, 1.0),
     );
+
     ref.read(annotationNotifierProvider.notifier).addNote(
-      rect: toRelative(absoluteRect, widget.pageSize),
-      text: text,
+      edgePosition: edgePosition,
+      initialText: text,
       page: widget.currentPage,
       color: _activeColor,
     );
   }
 
-  void _addBookmark() {
-    ref
-        .read(annotationNotifierProvider.notifier)
-        .addBookmark(page: widget.currentPage);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Bookmark added on page ${widget.currentPage}'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+  Future<void> _addBookmark() async {
+    await widget.onAddBookmark();
   }
 
   Future<String?> _showNoteInput() {

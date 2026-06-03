@@ -5,21 +5,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:pdf_app/core/constants.dart';
 import 'package:pdf_app/core/database/annotation_dao.dart';
+import 'package:pdf_app/core/database/note_entry_dao.dart';
 import 'package:pdf_app/core/models/annotation.dart';
 import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
+import 'package:pdf_app/core/models/note_entry.dart';
 import 'package:pdf_app/core/models/relative_rect_model.dart';
 import 'package:pdf_app/core/providers.dart';
 
 /// Manages annotation state for the currently viewed PDF.
 ///
+/// State is page-indexed so overlays for page N only rebuild when page N
+/// changes. Use [annotationsForPage] to read a single page's annotations.
+///
 /// Loads annotations for a window of pages around the current page.
 /// In continuous mode callers pass a larger [window] to cover all visible pages.
-///
-/// Writes are immediate — no debounce — so rapid additions are never dropped.
-/// The undo stack is capped at [_maxUndoDepth].
-class AnnotationNotifier extends Notifier<List<Annotation>> {
+class AnnotationNotifier
+    extends Notifier<Map<int, List<Annotation>>> {
   late final AnnotationDao _dao;
+  late final NoteEntryDao _noteEntryDao;
 
   String _currentPdfId = '';
   final _undoStack = <String>[];
@@ -28,14 +32,13 @@ class AnnotationNotifier extends Notifier<List<Annotation>> {
   bool get canUndo => _undoStack.isNotEmpty;
 
   @override
-  List<Annotation> build() {
+  Map<int, List<Annotation>> build() {
     _dao = ref.read(annotationDaoProvider);
-    return [];
+    _noteEntryDao = ref.read(noteEntryDaoProvider);
+    return {};
   }
 
   /// Loads annotations for [page] ± [window] of the given [pdfId].
-  ///
-  /// Pass [window] = 3 in continuous mode so all visible pages are covered.
   Future<void> loadForPage(String pdfId, int page, {int window = 1}) async {
     if (pdfId != _currentPdfId) {
       _undoStack.clear();
@@ -46,60 +49,90 @@ class AnnotationNotifier extends Notifier<List<Annotation>> {
     final startPage = max(1, page - window);
     final endPage = page + window;
 
-    final annotations = await _dao.getByPdfAndPageRange(pdfId, startPage, endPage);
-    state = annotations;
+    final list = await _dao.getByPdfAndPageRange(pdfId, startPage, endPage);
+    state = _mergeIntoState(state, list, startPage, endPage);
   }
 
   /// Loads ALL non-deleted annotations for [pdfId] — used by the panel.
-  Future<List<Annotation>> loadAllForPdf(String pdfId) async {
-    return _dao.getAllForPdf(pdfId);
-  }
+  Future<List<Annotation>> loadAllForPdf(String pdfId) =>
+      _dao.getAllForPdf(pdfId);
 
-  /// Creates a new highlight annotation.
-  ///
-  /// [selectedText] is the verbatim text extracted from the PDF at the
-  /// highlighted region, used for text-anchoring across zoom changes.
+  /// Creates a new highlight annotation from one or more word-snapped rects.
   void addHighlight({
-    required RelativeRectModel rect,
+    required List<RelativeRectModel> rects,
     required int page,
     AnnotationColor color = AnnotationColor.yellow,
     String? selectedText,
+    String? pdfFingerprint,
   }) {
     _addAnnotation(
-      _buildAnnotation(
+      _build(
         page: page,
         type: AnnotationType.highlight,
-        rect: rect,
+        rects: rects,
         color: color,
         selectedText: selectedText,
+        pdfFingerprint: pdfFingerprint,
       ),
     );
   }
 
-  /// Creates a new note annotation.
+  /// Creates a new note annotation marker on the page edge.
+  ///
+  /// [edgePosition] encodes the marker position: [RelativeRectModel.left] is
+  /// `0.0` for the left edge or `1.0` for the right edge; [RelativeRectModel.top]
+  /// is the vertical fraction of the tap (0–1).
+  /// The initial note text is stored as the first [NoteEntry].
   void addNote({
-    required RelativeRectModel rect,
-    required String text,
+    required RelativeRectModel edgePosition,
+    required String initialText,
     required int page,
     AnnotationColor color = AnnotationColor.yellow,
-    String? selectedText,
   }) {
-    _addAnnotation(
-      _buildAnnotation(
-        page: page,
-        type: AnnotationType.note,
-        rect: rect,
+    final annotation = _build(
+      page: page,
+      type: AnnotationType.note,
+      rects: [edgePosition],
+      color: color,
+    );
+    _addAnnotation(annotation);
+    final entry = NoteEntry(
+      id: uuid.v4(),
+      annotationId: annotation.id,
+      text: initialText,
+      createdAt: DateTime.now(),
+    );
+    _noteEntryDao.insert(entry).catchError((Object e, StackTrace s) {
+      developer.log(
+        'Failed to save note entry for ${annotation.id}',
+        name: 'pdf_app.annotation',
+        level: 1000,
+        error: e,
+        stackTrace: s,
+      );
+    });
+  }
+
+  /// Adds a new timestamped entry to an existing note annotation.
+  Future<void> addNoteEntry(String annotationId, String text) async {
+    await _noteEntryDao.insert(
+      NoteEntry(
+        id: uuid.v4(),
+        annotationId: annotationId,
         text: text,
-        color: color,
-        selectedText: selectedText,
+        createdAt: DateTime.now(),
       ),
     );
   }
 
-  /// Creates a new bookmark annotation (no rect).
+  /// Returns all [NoteEntry]s for [annotationId], oldest first.
+  Future<List<NoteEntry>> loadNoteEntries(String annotationId) =>
+      _noteEntryDao.getForAnnotation(annotationId);
+
+  /// Creates a new bookmark annotation (no rects).
   void addBookmark({required int page, String? label}) {
     _addAnnotation(
-      _buildAnnotation(
+      _build(
         page: page,
         type: AnnotationType.bookmark,
         label: label ?? 'Page $page',
@@ -109,34 +142,32 @@ class AnnotationNotifier extends Notifier<List<Annotation>> {
 
   /// Soft-deletes an annotation.
   Future<void> removeAnnotation(String id) async {
-    state = state.where((a) => a.id != id).toList();
+    state = _removeFromState(state, id);
     _undoStack.remove(id);
     _syncCanUndo();
     await _dao.softDelete(id);
   }
 
   /// Undoes the most recently added annotation.
-  ///
-  /// Returns a human-readable description of what was undone, or null if
-  /// there is nothing to undo.
   Future<String?> undo() async {
     if (_undoStack.isEmpty) return null;
 
     final id = _undoStack.removeLast();
     _syncCanUndo();
 
-    final annotation = state.firstWhere(
-      (a) => a.id == id,
-      orElse: () => const Annotation(
-        id: '',
-        pdfId: '',
-        page: 0,
-        type: AnnotationType.highlight,
-      ),
-    );
-    if (annotation.id.isEmpty) return null;
+    Annotation? annotation;
+    for (final list in state.values) {
+      for (final a in list) {
+        if (a.id == id) {
+          annotation = a;
+          break;
+        }
+      }
+      if (annotation != null) break;
+    }
+    if (annotation == null) return null;
 
-    state = state.where((a) => a.id != id).toList();
+    state = _removeFromState(state, id);
     await _dao.softDelete(id);
 
     return switch (annotation.type) {
@@ -148,40 +179,31 @@ class AnnotationNotifier extends Notifier<List<Annotation>> {
 
   /// Updates an existing note annotation's text.
   void updateNoteText(String id, String newText) {
-    state = state.map((a) {
-      if (a.id != id) return a;
-      final updated = a.copyWith(text: newText);
-      _saveAsync(updated);
-      return updated;
-    }).toList();
+    _mutateAnnotation(id, (a) => a.copyWith(text: newText));
   }
 
   /// Updates an existing annotation's color.
   void updateColor(String id, AnnotationColor color) {
-    state = state.map((a) {
-      if (a.id != id) return a;
-      final updated = a.copyWith(color: color);
-      _saveAsync(updated);
-      return updated;
-    }).toList();
+    _mutateAnnotation(id, (a) => a.copyWith(color: color));
   }
 
-  /// Returns annotations filtered to a specific [page], excluding deleted ones.
+  /// Returns non-deleted annotations for a single [page].
   List<Annotation> annotationsForPage(int page) =>
-      state.where((a) => a.page == page && !a.isDeleted).toList();
+      (state[page] ?? []).where((a) => !a.isDeleted).toList();
 
   // ---------------------------------------------------------------------------
   // Internal
   // ---------------------------------------------------------------------------
 
-  Annotation _buildAnnotation({
+  Annotation _build({
     required int page,
     required AnnotationType type,
-    RelativeRectModel? rect,
+    List<RelativeRectModel> rects = const [],
     String? selectedText,
     String? text,
     String? label,
     AnnotationColor color = AnnotationColor.yellow,
+    String? pdfFingerprint,
   }) {
     final now = DateTime.now();
     return Annotation(
@@ -189,27 +211,69 @@ class AnnotationNotifier extends Notifier<List<Annotation>> {
       pdfId: _currentPdfId,
       page: page,
       type: type,
-      rect: rect,
+      rects: rects,
       selectedText: selectedText,
       text: text,
       label: label,
       color: color,
-      coordinateVersion: 2,
+      pdfFingerprint: pdfFingerprint,
       createdAt: now,
       updatedAt: now,
     );
   }
 
   void _addAnnotation(Annotation annotation) {
-    state = [...state, annotation];
+    final page = annotation.page;
+    state = {
+      ...state,
+      page: [...(state[page] ?? []), annotation],
+    };
     _undoStack.add(annotation.id);
     if (_undoStack.length > _maxUndoDepth) _undoStack.removeAt(0);
     _syncCanUndo();
     _saveAsync(annotation);
   }
 
-  /// Pushes the current [canUndo] state into [canUndoAnnotationProvider] so
-  /// the toolbar undo button reflects reality.
+  Map<int, List<Annotation>> _removeFromState(
+    Map<int, List<Annotation>> current,
+    String id,
+  ) {
+    return {
+      for (final entry in current.entries)
+        entry.key: entry.value.where((a) => a.id != id).toList(),
+    };
+  }
+
+  /// Replaces loaded page range while preserving pages outside the window.
+  Map<int, List<Annotation>> _mergeIntoState(
+    Map<int, List<Annotation>> current,
+    List<Annotation> loaded,
+    int startPage,
+    int endPage,
+  ) {
+    final byPage = <int, List<Annotation>>{};
+    for (final a in loaded) {
+      (byPage[a.page] ??= []).add(a);
+    }
+    final updated = Map<int, List<Annotation>>.from(current);
+    for (var p = startPage; p <= endPage; p++) {
+      updated[p] = byPage[p] ?? [];
+    }
+    return updated;
+  }
+
+  void _mutateAnnotation(String id, Annotation Function(Annotation) mutate) {
+    state = {
+      for (final entry in state.entries)
+        entry.key: entry.value.map((a) {
+          if (a.id != id) return a;
+          final updated = mutate(a);
+          _saveAsync(updated);
+          return updated;
+        }).toList(),
+    };
+  }
+
   void _syncCanUndo() {
     ref.read(canUndoAnnotationProvider.notifier).setValue(canUndo);
   }

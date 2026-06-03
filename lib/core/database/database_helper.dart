@@ -11,8 +11,10 @@ abstract class DatabaseProvider {
 ///   v1 — initial schema
 ///   v2 — added color column
 ///   v3 — added label column
-///   v4 — added selected_text, text_run_start, text_run_end,
-///         coordinate_version, created_at, updated_at columns
+///   v4 — added selected_text, coordinate_version, created_at, updated_at
+///   v5 — replaced rect_* columns with rects JSON, added pdf_fingerprint;
+///         dropped text_run_start / text_run_end / coordinate_version
+///   v6 — added note_entries table for timestamped note entries
 class DatabaseHelper implements DatabaseProvider {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   static Database? _database;
@@ -34,7 +36,7 @@ class DatabaseHelper implements DatabaseProvider {
 
     return await openDatabase(
       path,
-      version: 4,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -47,24 +49,33 @@ class DatabaseHelper implements DatabaseProvider {
         pdf_id TEXT NOT NULL,
         page INTEGER NOT NULL,
         type TEXT NOT NULL,
-        rect_top REAL,
-        rect_left REAL,
-        rect_bottom REAL,
-        rect_right REAL,
+        rects TEXT NOT NULL DEFAULT '[]',
         selected_text TEXT,
-        text_run_start INTEGER,
-        text_run_end INTEGER,
         text TEXT,
         label TEXT,
         color TEXT NOT NULL DEFAULT 'yellow',
         is_deleted INTEGER NOT NULL DEFAULT 0,
-        coordinate_version INTEGER NOT NULL DEFAULT 2,
+        pdf_fingerprint TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     ''');
 
     await db.execute('CREATE INDEX idx_pdf_page ON annotations(pdf_id, page)');
+
+    await db.execute('''
+      CREATE TABLE note_entries (
+        id TEXT PRIMARY KEY,
+        annotation_id TEXT NOT NULL,
+        text TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (annotation_id) REFERENCES annotations(id)
+      )
+    ''');
+
+    await db.execute(
+      'CREATE INDEX idx_note_entries_annotation ON note_entries(annotation_id)',
+    );
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -78,9 +89,12 @@ class DatabaseHelper implements DatabaseProvider {
     }
     if (oldVersion < 4) {
       await db.execute('ALTER TABLE annotations ADD COLUMN selected_text TEXT');
-      await db.execute('ALTER TABLE annotations ADD COLUMN text_run_start INTEGER');
-      await db.execute('ALTER TABLE annotations ADD COLUMN text_run_end INTEGER');
-      // Existing rows get coordinate_version = 1 (legacy broken coordinates).
+      await db.execute(
+        'ALTER TABLE annotations ADD COLUMN text_run_start INTEGER',
+      );
+      await db.execute(
+        'ALTER TABLE annotations ADD COLUMN text_run_end INTEGER',
+      );
       await db.execute(
         'ALTER TABLE annotations ADD COLUMN coordinate_version INTEGER NOT NULL DEFAULT 1',
       );
@@ -89,6 +103,41 @@ class DatabaseHelper implements DatabaseProvider {
       );
       await db.execute(
         "ALTER TABLE annotations ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now'))",
+      );
+    }
+    if (oldVersion < 5) {
+      // Encode existing single-rect columns into the new JSON rects column.
+      await db.execute(
+        "ALTER TABLE annotations ADD COLUMN rects TEXT NOT NULL DEFAULT '[]'",
+      );
+      await db.execute('''
+        UPDATE annotations
+        SET rects = json_array(
+          json_object(
+            'top',    CAST(rect_top    AS REAL),
+            'left',   CAST(rect_left   AS REAL),
+            'bottom', CAST(rect_bottom AS REAL),
+            'right',  CAST(rect_right  AS REAL)
+          )
+        )
+        WHERE rect_top IS NOT NULL
+      ''');
+      await db.execute(
+        'ALTER TABLE annotations ADD COLUMN pdf_fingerprint TEXT',
+      );
+    }
+    if (oldVersion < 6) {
+      await db.execute('''
+        CREATE TABLE note_entries (
+          id TEXT PRIMARY KEY,
+          annotation_id TEXT NOT NULL,
+          text TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (annotation_id) REFERENCES annotations(id)
+        )
+      ''');
+      await db.execute(
+        'CREATE INDEX idx_note_entries_annotation ON note_entries(annotation_id)',
       );
     }
   }

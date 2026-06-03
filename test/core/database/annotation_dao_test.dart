@@ -6,6 +6,8 @@ import 'package:pdf_app/core/models/annotation.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
 import 'package:pdf_app/core/models/relative_rect_model.dart';
 
+const _rect = RelativeRectModel(top: 0.1, left: 0.1, bottom: 0.2, right: 0.9);
+
 void main() {
   late Database db;
   late AnnotationDao dao;
@@ -23,12 +25,13 @@ void main() {
               pdf_id TEXT NOT NULL,
               page INTEGER NOT NULL,
               type TEXT NOT NULL,
-              rect_top REAL,
-              rect_left REAL,
-              rect_bottom REAL,
-              rect_right REAL,
+              rects TEXT NOT NULL DEFAULT '[]',
+              selected_text TEXT,
               text TEXT,
+              label TEXT,
+              color TEXT NOT NULL DEFAULT 'yellow',
               is_deleted INTEGER NOT NULL DEFAULT 0,
+              pdf_fingerprint TEXT,
               created_at TEXT NOT NULL DEFAULT (datetime('now')),
               updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
@@ -56,12 +59,7 @@ void main() {
       pdfId: pdfId,
       page: page,
       type: AnnotationType.highlight,
-      rect: const RelativeRectModel(
-        top: 0.1,
-        left: 0.1,
-        bottom: 0.2,
-        right: 0.9,
-      ),
+      rects: const [_rect],
     );
   }
 
@@ -75,8 +73,8 @@ void main() {
       expect(results.length, 1);
       expect(results.first.id, 'test-uuid-1');
       expect(results.first.type, AnnotationType.highlight);
-      expect(results.first.rect, isNotNull);
-      expect(results.first.rect!.top, closeTo(0.1, 0.001));
+      expect(results.first.rects.length, 1);
+      expect(results.first.rects.first.top, closeTo(0.1, 0.001));
     });
 
     test('retrieve by page range', () async {
@@ -85,7 +83,6 @@ void main() {
       await dao.upsert(makeHighlight(id: 'a3', page: 3));
       await dao.upsert(makeHighlight(id: 'a4', page: 5));
 
-      // Should get pages 1-3 only
       final results = await dao.getByPdfAndPageRange('pdf-1', 1, 3);
 
       expect(results.length, 3);
@@ -104,21 +101,18 @@ void main() {
       await dao.upsert(makeHighlight());
 
       final updated = makeHighlight().copyWith(
-        rect: const RelativeRectModel(
-          top: 0.5,
-          left: 0.5,
-          bottom: 0.6,
-          right: 0.7,
-        ),
+        rects: const [
+          RelativeRectModel(top: 0.5, left: 0.5, bottom: 0.6, right: 0.7),
+        ],
       );
       await dao.upsert(updated);
 
       final results = await dao.getByPdfAndPageRange('pdf-1', 1, 1);
       expect(results.length, 1);
-      expect(results.first.rect!.top, closeTo(0.5, 0.001));
+      expect(results.first.rects.first.top, closeTo(0.5, 0.001));
     });
 
-    test('bookmark annotation has no rect', () async {
+    test('bookmark annotation has empty rects', () async {
       final bookmark = Annotation(
         id: 'bookmark-1',
         pdfId: 'pdf-1',
@@ -129,22 +123,19 @@ void main() {
 
       final results = await dao.getByPdfAndPageRange('pdf-1', 3, 3);
       expect(results.length, 1);
-      expect(results.first.rect, isNull);
+      expect(results.first.rects, isEmpty);
       expect(results.first.type, AnnotationType.bookmark);
     });
 
-    test('note annotation has rect and text', () async {
+    test('note annotation has rects and text', () async {
       final note = Annotation(
         id: 'note-1',
         pdfId: 'pdf-1',
         page: 2,
         type: AnnotationType.note,
-        rect: const RelativeRectModel(
-          top: 0.3,
-          left: 0.2,
-          bottom: 0.35,
-          right: 0.25,
-        ),
+        rects: const [
+          RelativeRectModel(top: 0.3, left: 0.2, bottom: 0.35, right: 0.25),
+        ],
         text: 'Important point here',
       );
       await dao.upsert(note);
@@ -152,7 +143,7 @@ void main() {
       final results = await dao.getByPdfAndPageRange('pdf-1', 2, 2);
       expect(results.length, 1);
       expect(results.first.text, 'Important point here');
-      expect(results.first.rect, isNotNull);
+      expect(results.first.rects.length, 1);
     });
 
     test('different pdf_ids are isolated', () async {

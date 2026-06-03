@@ -8,8 +8,7 @@ import 'package:pdf_app/core/utils/coordinate_mapper.dart';
 /// Renders annotation overlays on top of a PDF page.
 ///
 /// [pageSize] MUST be the rendered page size on screen (from LayoutBuilder),
-/// not the PDF logical page size in user-space points. Using the rendered size
-/// ensures that highlights are drawn at the correct screen positions.
+/// not the PDF logical page size in user-space points.
 ///
 /// Wrapped in [IgnorePointer] so gestures pass through to the viewer.
 class HighlightPainter extends CustomPainter {
@@ -35,65 +34,70 @@ class HighlightPainter extends CustomPainter {
   }
 
   void _paintHighlight(Canvas canvas, Annotation annotation) {
-    final rect = annotation.rect;
-    if (rect == null) return;
+    final paint = Paint()
+      ..color = annotation.color.overlay
+      ..style = PaintingStyle.fill;
 
-    final absoluteRect = toAbsolute(rect, pageSize);
-    canvas.drawRect(
-      absoluteRect,
-      Paint()
-        ..color = annotation.color.overlay
-        ..style = PaintingStyle.fill,
-    );
+    for (final rect in annotation.rects) {
+      canvas.drawRect(toAbsolute(rect, pageSize), paint);
+    }
   }
 
-  /// Paints a note as a highlighted text band with a badge icon at its
-  /// top-right corner, making notes immediately discoverable while reading.
   void _paintNote(Canvas canvas, Annotation annotation) {
-    final rect = annotation.rect;
-    if (rect == null) return;
+    if (annotation.rects.isEmpty) return;
 
-    final absoluteRect = toAbsolute(rect, pageSize);
+    final pos = annotation.rects.first;
+    // left == 0.0 → left edge, left == 1.0 → right edge.
+    final isLeftEdge = pos.left < 0.5;
+    final verticalCenter = pos.top * pageSize.height;
 
-    // Highlight band behind the note so the user can see what text it covers.
-    canvas.drawRect(
-      absoluteRect,
-      Paint()
-        ..color = annotation.color.overlay
-        ..style = PaintingStyle.fill,
-    );
+    const tabWidth = 20.0;
+    const tabHeight = 28.0;
+    const cornerRadius = Radius.circular(4);
 
-    // Badge circle at the top-right corner of the highlighted region.
-    const badgeRadius = 10.0;
-    final badgeCenter = Offset(
-      absoluteRect.right - badgeRadius,
-      absoluteRect.top + badgeRadius,
-    );
+    // Tab protrudes inward from the edge.
+    final tabRect = isLeftEdge
+        ? Rect.fromLTWH(0, verticalCenter - tabHeight / 2, tabWidth, tabHeight)
+        : Rect.fromLTWH(
+            pageSize.width - tabWidth,
+            verticalCenter - tabHeight / 2,
+            tabWidth,
+            tabHeight,
+          );
 
-    canvas.drawCircle(
-      badgeCenter,
-      badgeRadius,
+    final rrect = isLeftEdge
+        ? RRect.fromRectAndCorners(
+            tabRect,
+            topRight: cornerRadius,
+            bottomRight: cornerRadius,
+          )
+        : RRect.fromRectAndCorners(
+            tabRect,
+            topLeft: cornerRadius,
+            bottomLeft: cornerRadius,
+          );
+
+    canvas.drawRRect(
+      rrect,
       Paint()
         ..color = annotation.color.solid
         ..style = PaintingStyle.fill,
     );
 
-    // Pencil icon character drawn inside the badge for clarity.
     final tp = TextPainter(
       text: const TextSpan(
         text: '✎',
-        style: TextStyle(
-          fontSize: 10,
-          color: Colors.white,
-          height: 1,
-        ),
+        style: TextStyle(fontSize: 13, color: Colors.white, height: 1),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
 
     tp.paint(
       canvas,
-      badgeCenter - Offset(tp.width / 2, tp.height / 2),
+      Offset(
+        tabRect.center.dx - tp.width / 2,
+        tabRect.center.dy - tp.height / 2,
+      ),
     );
   }
 

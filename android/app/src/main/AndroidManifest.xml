@@ -1,15 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Storage permissions for scanning device PDFs.
-         READ_MEDIA_IMAGES/VIDEO/AUDIO covers Android 13+;
-         READ_EXTERNAL_STORAGE covers Android 12 and below. -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-    <!-- Required for MANAGE_EXTERNAL_STORAGE on Android 11+ if needed -->
+         MANAGE_EXTERNAL_STORAGE — broad file system access, all Android versions.
+         READ_EXTERNAL_STORAGE   — fallback for Android ≤ 12.
+         READ_MEDIA_DOCUMENTS    — document access on Android 13+ (API 33+). -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         android:minSdkVersion="30" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_DOCUMENTS"
+        android:minSdkVersion="33" />
     <application
         android:label="pdf_app"
         android:name="${applicationName}"

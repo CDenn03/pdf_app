@@ -39,18 +39,25 @@ class PdfScanService implements PdfScanner {
   }
 
   /// Requests storage permission. Returns true if we have enough access to
-  /// proceed (granted, limited, or restricted — we still attempt the scan).
+  /// proceed.
   Future<bool> _requestPermission() async {
     if (!Platform.isAndroid) return true;
 
-    // REQUEST_EXTERNAL_STORAGE works on all Android versions; on 13+ it may
-    // be auto-granted for read-only access to shared storage.
-    final status = await Permission.storage.request();
-    if (status.isGranted || status.isLimited) return true;
+    // MANAGE_EXTERNAL_STORAGE covers all Android versions and allows scanning
+    // the full file system. On Android 11+ (API 30+) it opens the
+    // "Allow management of all files" system screen if not yet granted.
+    // READ_EXTERNAL_STORAGE is requested as a fallback for older devices
+    // where MANAGE_EXTERNAL_STORAGE may not be available.
+    final manageStatus = await Permission.manageExternalStorage.status;
+    if (!manageStatus.isGranted) {
+      await Permission.manageExternalStorage.request();
+    }
 
-    // On Android 11+ (API 30+) the storage permission may be permanently
-    // denied but the external storage is still readable for common dirs.
-    // Proceed anyway — the walk will simply skip unreadable dirs.
+    if (!(await Permission.manageExternalStorage.isGranted)) {
+      await Permission.storage.request();
+    }
+
+    // Proceed regardless — the walk skips unreadable dirs.
     return true;
   }
 
