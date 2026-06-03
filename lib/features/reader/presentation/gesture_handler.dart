@@ -74,16 +74,14 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
       final dragRect = Rect.fromPoints(start, end);
       if (dragRect.width > 10 && dragRect.height > 4) {
         final (rects, text) = _extractWordRectsAndText(dragRect);
-        // Fall back to the drag rect itself when text extraction is unavailable.
-        final finalRects = rects.isNotEmpty
-            ? rects
-            : [toRelative(dragRect, widget.pageSize)];
-        ref.read(annotationNotifierProvider.notifier).addHighlight(
-          rects: finalRects,
-          page: widget.currentPage,
-          color: _activeColor,
-          selectedText: text,
-        );
+        if (rects.isNotEmpty) {
+          ref.read(annotationNotifierProvider.notifier).addHighlight(
+            rects: rects,
+            page: widget.currentPage,
+            color: _activeColor,
+            selectedText: text,
+          );
+        }
       }
     }
 

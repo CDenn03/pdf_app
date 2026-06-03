@@ -210,10 +210,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Future<void> _performUndo() async {
     final message = await ref.read(annotationNotifierProvider.notifier).undo();
     if (message != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
-      );
+      _showToast(message);
     }
+  }
+
+  void _showToast(String message) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          bottom: 60 + 12 + bottomInset + 8,
+        ),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -262,11 +276,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           _BookmarkLabelDialog(defaultLabel: 'Page $_currentPage'),
     );
     if (label == null) return;
+    final color = ref.read(activeAnnotationColorProvider);
     ref
         .read(annotationNotifierProvider.notifier)
         .addBookmark(
           page: _currentPage,
           label: label.trim().isEmpty ? null : label.trim(),
+          color: color,
         );
     setState(() => _currentPageBookmarked = true);
   }
@@ -420,7 +436,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             bottom: 12 + MediaQuery.of(context).padding.bottom,
             child: AnnotationToolbar(
               activeTool: _activeTool,
-              onToolChanged: (tool) => setState(() => _activeTool = tool),
+              onToolChanged: (tool) {
+                if (tool == AnnotationTool.bookmark) {
+                  _addBookmarkWithLabel();
+                } else {
+                  setState(() => _activeTool = tool);
+                }
+              },
               onExit: _exitAnnotationMode,
               onUndo: _performUndo,
               readingMode: readingMode,
@@ -534,6 +556,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         .where((a) => a.type == AnnotationType.note && a.rects.isNotEmpty)
         .toList();
 
+    final bookmarks =
+        annotations.where((a) => a.type == AnnotationType.bookmark).toList();
+
     return SizedBox(
       width: pageSize.width,
       height: pageSize.height,
@@ -568,6 +593,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           // note badges intercept taps before the gesture handler does.
           for (final note in notes)
             _NoteTapTarget(annotation: note, pageSize: pageSize),
+
+          for (final (i, bm) in bookmarks.indexed)
+            _BookmarkTapTarget(annotation: bm, index: i),
         ],
       ),
     );
@@ -607,6 +635,7 @@ class _NoteTapTarget extends StatelessWidget {
       top: (verticalCenter - tabHeight / 2).clamp(0.0, double.infinity),
       child: GestureDetector(
         onTap: () => _showNoteSheet(context),
+        behavior: HitTestBehavior.opaque,
         child: const SizedBox(width: tabWidth, height: tabHeight),
       ),
     );
@@ -619,6 +648,39 @@ class _NoteTapTarget extends StatelessWidget {
       useSafeArea: true,
       showDragHandle: true,
       builder: (ctx) => _NoteMarkerSheet(annotation: annotation),
+    );
+  }
+}
+
+class _BookmarkTapTarget extends StatelessWidget {
+  const _BookmarkTapTarget({required this.annotation, required this.index});
+
+  final app.Annotation annotation;
+  final int index;
+
+  static const _ribbonW = 24.0;
+  static const _ribbonH = 40.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      right: 4.0 + index * (_ribbonW + 4),
+      top: 0,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _showDrawer(context),
+        child: const SizedBox(width: _ribbonW, height: _ribbonH),
+      ),
+    );
+  }
+
+  void _showDrawer(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (ctx) => _BookmarkSheet(annotation: annotation),
     );
   }
 }
@@ -810,10 +872,94 @@ class _NoteEntryTile extends StatelessWidget {
   }
 
   String _formatTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt.toLocal());
+    if (diff.inSeconds < 60) return 'just now';
+    if (diff.inMinutes < 60) {
+      final m = diff.inMinutes;
+      return '$m ${m == 1 ? 'min' : 'mins'} ago';
+    }
+    if (diff.inHours < 24) {
+      final h = diff.inHours;
+      return '$h ${h == 1 ? 'hr' : 'hrs'} ago';
+    }
+    if (diff.inDays < 7) {
+      final d = diff.inDays;
+      return '$d ${d == 1 ? 'day' : 'days'} ago';
+    }
+    if (diff.inDays < 30) {
+      final w = (diff.inDays / 7).floor();
+      return '$w ${w == 1 ? 'week' : 'weeks'} ago';
+    }
     final local = dt.toLocal();
-    final h = local.hour.toString().padLeft(2, '0');
-    final m = local.minute.toString().padLeft(2, '0');
-    return '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}  $h:$m';
+    return '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bookmark sheet
+// ---------------------------------------------------------------------------
+
+class _BookmarkSheet extends ConsumerWidget {
+  const _BookmarkSheet({required this.annotation});
+
+  final app.Annotation annotation;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final color = annotation.color;
+    final label = annotation.label ?? 'Page ${annotation.page}';
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 4,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: color.solid,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 20),
+                tooltip: 'Remove bookmark',
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  ref
+                      .read(annotationNotifierProvider.notifier)
+                      .removeAnnotation(annotation.id);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Page ${annotation.page}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

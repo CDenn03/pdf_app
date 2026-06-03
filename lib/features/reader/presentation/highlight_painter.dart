@@ -19,6 +19,7 @@ class HighlightPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    var bookmarkIndex = 0;
     for (final annotation in annotations) {
       if (annotation.isDeleted) continue;
 
@@ -28,7 +29,7 @@ class HighlightPainter extends CustomPainter {
         case AnnotationType.note:
           _paintNote(canvas, annotation);
         case AnnotationType.bookmark:
-          break;
+          _paintBookmark(canvas, annotation, bookmarkIndex++);
       }
     }
   }
@@ -98,6 +99,28 @@ class HighlightPainter extends CustomPainter {
         tabRect.center.dx - tp.width / 2,
         tabRect.center.dy - tp.height / 2,
       ),
+    );
+  }
+
+  void _paintBookmark(Canvas canvas, Annotation annotation, int index) {
+    const w = 24.0;
+    const h = 40.0;
+    const notchDepth = 8.0;
+    final left = pageSize.width - 4.0 - (index + 1) * (w + 4);
+
+    final path = Path()
+      ..moveTo(left, 0)
+      ..lineTo(left + w, 0)
+      ..lineTo(left + w, h)
+      ..lineTo(left + w / 2, h - notchDepth)
+      ..lineTo(left, h)
+      ..close();
+
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = annotation.color.solid
+        ..style = PaintingStyle.fill,
     );
   }
 

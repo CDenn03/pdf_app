@@ -130,12 +130,17 @@ class AnnotationNotifier
       _noteEntryDao.getForAnnotation(annotationId);
 
   /// Creates a new bookmark annotation (no rects).
-  void addBookmark({required int page, String? label}) {
+  void addBookmark({
+    required int page,
+    String? label,
+    AnnotationColor color = AnnotationColor.yellow,
+  }) {
     _addAnnotation(
       _build(
         page: page,
         type: AnnotationType.bookmark,
         label: label ?? 'Page $page',
+        color: color,
       ),
     );
   }

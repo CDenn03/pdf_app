@@ -80,16 +80,15 @@ class AnnotationToolbar extends ConsumerWidget {
                   onTap: () => onToolChanged(AnnotationTool.bookmark),
                 ),
               ),
-              // Color picker — only for highlight/note, fixed width.
-              if (activeTool != AnnotationTool.bookmark)
-                _ColorPicker(
-                  activeColor: activeColor,
-                  onColorSelected: (color) {
-                    ref
-                        .read(activeAnnotationColorProvider.notifier)
-                        .setValue(color);
-                  },
-                ),
+              // Color picker — for all tools, fixed width.
+              _ColorPicker(
+                activeColor: activeColor,
+                onColorSelected: (color) {
+                  ref
+                      .read(activeAnnotationColorProvider.notifier)
+                      .setValue(color);
+                },
+              ),
               // Undo + Done — fixed width.
               IconButton(
                 icon: Icon(

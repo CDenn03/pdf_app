@@ -7,10 +7,7 @@ import 'package:pdf_app/core/models/annotation_type.dart';
 import 'package:pdf_app/features/reader/state/providers.dart';
 import 'package:pdf_app/shared/widgets/overlay_panel.dart';
 
-/// Shows the annotation panel as a bottom sheet.
-///
-/// Loads all annotations for [pdfId] and groups them by page.
-/// Tapping an item calls [onNavigate] with the target page number.
+/// Shows the annotation panel as a bottom sheet with tabs.
 Future<void> showAnnotationPanel({
   required BuildContext context,
   required String pdfId,
@@ -44,13 +41,29 @@ class _AnnotationPanelContent extends ConsumerStatefulWidget {
 }
 
 class _AnnotationPanelContentState
-    extends ConsumerState<_AnnotationPanelContent> {
+    extends ConsumerState<_AnnotationPanelContent>
+    with SingleTickerProviderStateMixin {
   List<Annotation>? _annotations;
+  late final TabController _tabController;
+
+  static const _tabs = [
+    (label: 'All', type: null),
+    (label: 'Highlights', type: AnnotationType.highlight),
+    (label: 'Notes', type: AnnotationType.note),
+    (label: 'Bookmarks', type: AnnotationType.bookmark),
+  ];
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: _tabs.length, vsync: this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -71,12 +84,65 @@ class _AnnotationPanelContentState
       );
     }
 
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: _tabs
+              .map((t) => Tab(
+                    text: t.type == null
+                        ? '${t.label} (${annotations.length})'
+                        : '${t.label} (${annotations.where((a) => a.type == t.type).length})',
+                  ))
+              .toList(),
+        ),
+        Flexible(
+          child: TabBarView(
+            controller: _tabController,
+            children: _tabs.map((t) {
+              final filtered = t.type == null
+                  ? annotations
+                  : annotations.where((a) => a.type == t.type).toList();
+              return _AnnotationList(
+                annotations: filtered,
+                onNavigate: widget.onNavigate,
+                onDelete: (id) async {
+                  await ref
+                      .read(annotationNotifierProvider.notifier)
+                      .removeAnnotation(id);
+                  _load();
+                },
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AnnotationList extends StatelessWidget {
+  const _AnnotationList({
+    required this.annotations,
+    required this.onNavigate,
+    required this.onDelete,
+  });
+
+  final List<Annotation> annotations;
+  final void Function(int page) onNavigate;
+  final void Function(String id) onDelete;
+
+  @override
+  Widget build(BuildContext context) {
     if (annotations.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(32),
         child: Center(
           child: Text(
-            'No annotations yet.\nHighlight text or add notes while reading.',
+            'Nothing here yet.',
             textAlign: TextAlign.center,
           ),
         ),
@@ -99,13 +165,8 @@ class _AnnotationPanelContentState
         return _PageGroup(
           page: page,
           annotations: items,
-          onNavigate: widget.onNavigate,
-          onDelete: (id) async {
-            await ref
-                .read(annotationNotifierProvider.notifier)
-                .removeAnnotation(id);
-            _load();
-          },
+          onNavigate: onNavigate,
+          onDelete: onDelete,
         );
       },
     );
@@ -167,8 +228,6 @@ class _AnnotationItem extends StatelessWidget {
       AnnotationType.bookmark => (Icons.bookmark_outline, 'Bookmark'),
     };
 
-    // Display text: for bookmarks use the label, for notes use the text,
-    // otherwise fall back to the type name.
     final displayText = switch (annotation.type) {
       AnnotationType.bookmark => annotation.label ?? label,
       AnnotationType.note => annotation.text ?? label,
