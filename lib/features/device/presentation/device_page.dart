@@ -128,7 +128,7 @@ class DevicePageState extends ConsumerState<DevicePage> {
   /// Returns null if cancelled, '' for root library, or a collection id.
   Future<String?> _pickOrCreateCollection() async {
     final collections = ref.read(collectionsProvider);
-    return showDialog<String>(
+    final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
         title: const Text('Add to collection'),
@@ -144,24 +144,23 @@ class DevicePageState extends ConsumerState<DevicePage> {
             ),
           const Divider(),
           SimpleDialogOption(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final name = await _showNewCollectionDialog();
-              if (name != null && name.trim().isNotEmpty && mounted) {
-                ref
-                    .read(collectionsProvider.notifier)
-                    .addCollection(name.trim());
-                // Reload and return the new collection id.
-                final updated = ref.read(collectionsProvider);
-                final newCol = updated.last;
-                if (mounted) Navigator.of(context).pop(newCol.id);
-              }
-            },
+            onPressed: () => Navigator.pop(ctx, '__new__'),
             child: const Text('+ New collection…'),
           ),
         ],
       ),
     );
+
+    if (choice != '__new__') return choice;
+
+    // User wants to create a new collection — show a second dialog.
+    if (!mounted) return null;
+    final name = await _showNewCollectionDialog();
+    if (name == null || name.trim().isEmpty || !mounted) return null;
+
+    await ref.read(collectionsProvider.notifier).addCollection(name.trim());
+    final updated = ref.read(collectionsProvider);
+    return updated.last.id;
   }
 
   Future<String?> _showNewCollectionDialog() {
