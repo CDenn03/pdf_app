@@ -73,7 +73,6 @@ class _SearchPanelContentState extends State<_SearchPanelContent> {
     });
 
     searcher.startTextSearch(query.trim());
-    if (mounted) setState(() => _searching = false);
   }
 
   void _submit() {

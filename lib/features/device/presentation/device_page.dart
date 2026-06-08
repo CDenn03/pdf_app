@@ -196,7 +196,8 @@ class DevicePageState extends ConsumerState<DevicePage> {
   @override
   Widget build(BuildContext context) {
     // .value ?? [] handles loading/error states from AsyncNotifier (#16).
-    final all = ref.watch(deviceFilesProvider).value ?? [];
+    final scanState = ref.watch(deviceFilesProvider);
+    final all = scanState.value ?? [];
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final secondary =
         isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
@@ -237,7 +238,9 @@ class DevicePageState extends ConsumerState<DevicePage> {
                 )
               : IconButton(
                   icon: Icon(Icons.refresh_outlined, color: secondary),
-                  onPressed: () => ref.read(deviceFilesProvider.notifier).scan(),
+                  onPressed: scanState.isLoading
+                      ? null
+                      : () => ref.read(deviceFilesProvider.notifier).scan(),
                   tooltip: 'Rescan',
                 ),
         ),
@@ -262,7 +265,7 @@ class DevicePageState extends ConsumerState<DevicePage> {
               });
             },
           ),
-        Expanded(child: _buildList(entries, isDark, secondary)),
+        Expanded(child: _buildList(entries, isDark, secondary, scanState.isLoading)),
         // Action bar sits above the floating nav bar.
         if (_selecting && _selected.isNotEmpty)
           _ActionBar(
@@ -281,8 +284,27 @@ class DevicePageState extends ConsumerState<DevicePage> {
     List<LibraryEntry> entries,
     bool isDark,
     Color secondary,
+    bool isLoading,
   ) {
+    if (isLoading) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator.adaptive(),
+            const SizedBox(height: 16),
+            Text(
+              'Scanning device…',
+              style: GoogleFonts.dmSans(fontSize: 14, color: secondary),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (entries.isEmpty && _query.isEmpty) {
+      final permDenied =
+          ref.watch(deviceFilesProvider.notifier).permissionDenied;
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -296,7 +318,7 @@ class DevicePageState extends ConsumerState<DevicePage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'No PDFs found on device',
+                permDenied ? 'Storage permission required' : 'No PDFs found on device',
                 style: GoogleFonts.fraunces(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
@@ -304,9 +326,31 @@ class DevicePageState extends ConsumerState<DevicePage> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Grant storage permission and tap refresh to scan.',
+                permDenied
+                    ? 'Allow storage access so the app can find your PDFs.'
+                    : 'No PDF files were found in common storage locations.',
                 style: GoogleFonts.dmSans(fontSize: 14, color: secondary),
                 textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: () =>
+                    ref.read(deviceFilesProvider.notifier).scan(),
+                icon: Icon(
+                  permDenied
+                      ? Icons.lock_open_outlined
+                      : Icons.refresh_outlined,
+                ),
+                label: Text(
+                  permDenied ? 'Grant Permission' : 'Scan Again',
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.brand,
+                  foregroundColor: AppColors.onBrand,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
             ],
           ),

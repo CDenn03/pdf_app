@@ -163,6 +163,9 @@ class DeviceFilesNotifier extends AsyncNotifier<List<LibraryEntry>> {
   late final FileChecker _fileChecker;
   late final PdfScanner _scanner;
 
+  /// True when the last scan was blocked by a denied storage permission.
+  bool permissionDenied = false;
+
   @override
   Future<List<LibraryEntry>> build() async {
     _fileChecker = ref.read(fileServiceProvider);
@@ -171,7 +174,10 @@ class DeviceFilesNotifier extends AsyncNotifier<List<LibraryEntry>> {
   }
 
   Future<List<LibraryEntry>> scan() async {
+    state = const AsyncLoading();
     final paths = await _scanner.scanForPdfs();
+    permissionDenied =
+        paths.isEmpty && !await _scanner.checkPermission();
     final entries = await Future.wait(
       paths.map((path) async {
         final status = await _fileChecker.checkFile(path);

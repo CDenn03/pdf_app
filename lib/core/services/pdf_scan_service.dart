@@ -9,6 +9,9 @@ import 'package:permission_handler/permission_handler.dart';
 abstract class PdfScanner {
   /// Returns absolute paths of all `.pdf` files found on the device.
   Future<List<String>> scanForPdfs();
+
+  /// Returns true if storage permission is currently granted.
+  Future<bool> checkPermission();
 }
 
 /// Concrete implementation that walks common storage directories.
@@ -39,32 +42,41 @@ class PdfScanService implements PdfScanner {
     return results;
   }
 
-  /// Requests storage permission. Returns true if we have enough access to
-  /// proceed.
+  @override
+  Future<bool> checkPermission() async {
+    if (!Platform.isAndroid) return true;
+    if (await Permission.manageExternalStorage.isGranted) return true;
+    if (await Permission.storage.isGranted) return true;
+    return Permission.photos.isGranted;
+  }
+
+  /// Requests storage permission. Returns true if access was granted,
+  /// false if denied (caller should show a prompt).
+  ///
+  /// Uses MANAGE_EXTERNAL_STORAGE (API 30+) for full file access, falling
+  /// back to READ_EXTERNAL_STORAGE / READ_MEDIA_IMAGES on older versions.
   Future<bool> _requestPermission() async {
     if (!Platform.isAndroid) return true;
 
-    // MANAGE_EXTERNAL_STORAGE is a restricted permission that triggers Play
-    // Store policy violations. Use READ_EXTERNAL_STORAGE (API < 33) or the
-    // granular READ_MEDIA_* permissions (API 33+) instead (#15).
-    //
-    // We check the Android version via the presence of READ_MEDIA_IMAGES
-    // permission: if requesting it returns a non-denied status the device is
-    // running API 33+.
-    final mediaStatus = await Permission.photos.status;
-    if (mediaStatus.isDenied) {
-      // API 33+ — request granular media permissions.
-      await Permission.photos.request();
+    // MANAGE_EXTERNAL_STORAGE is in the manifest for API 30+ and gives the
+    // broadest access. permission_handler opens the "Allow all files" screen.
+    final manageStatus = await Permission.manageExternalStorage.status;
+    if (manageStatus.isGranted) return true;
+    if (!manageStatus.isPermanentlyDenied) {
+      final result = await Permission.manageExternalStorage.request();
+      if (result.isGranted) return true;
     }
 
-    final storageStatus = await Permission.storage.status;
-    if (storageStatus.isDenied) {
-      // API < 33 fallback.
-      await Permission.storage.request();
-    }
+    // Fallback: READ_EXTERNAL_STORAGE (API ≤ 29) or READ_MEDIA_IMAGES (API 33+).
+    final storageResult = await Permission.storage.request();
+    if (storageResult.isGranted) return true;
 
-    // Proceed regardless — the walk skips unreadable dirs.
-    return true;
+    final photosResult = await Permission.photos.request();
+    if (photosResult.isGranted) return true;
+
+    // Permanently denied — send user to Settings.
+    await openAppSettings();
+    return false;
   }
 
   Future<List<Directory>> _storageRoots() async {
