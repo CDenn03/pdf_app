@@ -125,7 +125,7 @@ class _SelectableFileListState extends ConsumerState<SelectableFileList> {
   }
 
   Future<void> _addToCollection() async {
-    final collections = ref.read(collectionsProvider);
+    final collections = ref.read(collectionsProvider).value ?? [];
     final result = await _showCollectionPicker(collections);
     if (result == null) return; // cancelled
 
@@ -166,7 +166,7 @@ class _SelectableFileListState extends ConsumerState<SelectableFileList> {
           await ref
               .read(collectionsProvider.notifier)
               .addCollection(name.trim());
-          final updated = ref.read(collectionsProvider);
+          final updated = ref.read(collectionsProvider).value ?? [];
           return updated.last.id;
         },
       ),
@@ -207,8 +207,9 @@ class _SelectableFileListState extends ConsumerState<SelectableFileList> {
     final theme = Theme.of(context);
     final libraryPaths = ref
         .watch(libraryEntriesProvider)
-        .map((e) => e.path)
-        .toSet();
+        .value
+        ?.map((e) => e.path)
+        .toSet() ?? {};
     final allSelected =
         widget.entries.isNotEmpty && _selected.length == widget.entries.length;
 

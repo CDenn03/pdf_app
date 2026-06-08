@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:sqflite/sqflite.dart';
 
@@ -14,8 +15,8 @@ import 'package:pdf_app/core/models/relative_rect_model.dart';
 class AnnotationDao {
   final DatabaseProvider _provider;
 
-  AnnotationDao({DatabaseHelper? dbHelper})
-    : _provider = dbHelper ?? DatabaseHelper();
+  /// The dependency is required so it is always explicit and injectable (#17).
+  AnnotationDao({required DatabaseProvider dbHelper}) : _provider = dbHelper;
 
   AnnotationDao.withDatabase(Database db)
     : _provider = _DirectDatabaseProvider(db);
@@ -46,7 +47,21 @@ class AnnotationDao {
       whereArgs: [pdfId],
       orderBy: 'page ASC',
     );
-    return maps.map(_fromMap).toList();
+    final result = <Annotation>[];
+    for (final map in maps) {
+      try {
+        result.add(_fromMap(map));
+      } catch (e, s) {
+        developer.log(
+          'Skipping malformed annotation row: $map',
+          name: 'pdf_app.dao',
+          level: 900,
+          error: e,
+          stackTrace: s,
+        );
+      }
+    }
+    return result;
   }
 
   /// Inserts or updates an annotation.

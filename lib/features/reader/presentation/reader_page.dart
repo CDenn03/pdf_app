@@ -1,6 +1,4 @@
-import 'dart:async';
-import 'dart:io';
-
+import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +8,8 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf_pdf;
 
 import 'package:pdf_app/core/constants.dart';
+import 'package:pdf_app/core/services/app_settings_service.dart';
+import 'package:pdf_app/core/utils/share_utils.dart';
 import 'package:pdf_app/core/models/annotation.dart' as app;
 import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
@@ -23,6 +23,9 @@ import 'package:pdf_app/features/reader/presentation/annotation_toolbar.dart';
 import 'package:pdf_app/features/reader/presentation/gesture_handler.dart';
 import 'package:pdf_app/features/reader/presentation/highlight_painter.dart';
 import 'package:pdf_app/features/reader/presentation/more_panel.dart';
+import 'package:pdf_app/features/reader/presentation/reader_annotation_controller.dart';
+import 'package:pdf_app/features/reader/presentation/reader_bar_controller.dart';
+import 'package:pdf_app/features/reader/presentation/reader_document_controller.dart';
 import 'package:pdf_app/features/reader/presentation/search_panel.dart';
 import 'package:pdf_app/features/reader/presentation/toc_panel.dart';
 import 'package:pdf_app/features/reader/state/providers.dart';
@@ -44,21 +47,9 @@ class ReaderPage extends ConsumerStatefulWidget {
 
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   late final PdfViewerController _pdfController;
-
-  int _currentPage = 1;
-  int _totalPages = 1;
-  sf_pdf.PdfDocument? _sfDocument;
-
-  // UI chrome visibility.
-  bool _barsVisible = true;
-  Timer? _autoHideTimer;
-
-  // Annotation mode.
-  bool _annotating = false;
-  AnnotationTool _activeTool = AnnotationTool.highlight;
-
-  // Reading mode and scroll direction are derived from the global settings
-  // provider in build() — no local fields needed.
+  late final ReaderDocumentController _docCtrl;
+  late final ReaderBarController _barCtrl;
+  late final ReaderAnnotationController _annotCtrl;
 
   // Bookmark state for current page.
   bool _currentPageBookmarked = false;
@@ -66,11 +57,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   bool get _isAsset =>
       !widget.pdfPath.startsWith('/') && !widget.pdfPath.contains('://');
 
+  // Convenience getters delegating to controllers.
+  int get _currentPage => _docCtrl.currentPage;
+  int get _totalPages => _docCtrl.totalPages;
+  sf_pdf.PdfDocument? get _sfDocument => _docCtrl.sfDocument;
+  bool get _barsVisible => _barCtrl.barsVisible;
+  bool get _annotating => _annotCtrl.annotating;
+  AnnotationTool get _activeTool => _annotCtrl.activeTool;
+
   @override
   void initState() {
     super.initState();
     _pdfController = PdfViewerController();
-    _scheduleAutoHide();
+
+    _barCtrl = ReaderBarController(onStateChanged: () => setState(() {}));
+    _annotCtrl = ReaderAnnotationController(
+      onEnter: _barCtrl.hide,
+      onExit: () => _barCtrl.show(annotating: false),
+      onStateChanged: () => setState(() {}),
+    );
+    _docCtrl = ReaderDocumentController(
+      pdfPath: widget.pdfPath,
+      isAsset: _isAsset,
+      ref: ref,
+      pdfController: _pdfController,
+      onStateChanged: () {
+        if (mounted) setState(() => _updateBookmarkState());
+      },
+    );
+
+    _barCtrl.scheduleAutoHide();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(libraryEntriesProvider.notifier).recordOpened(widget.pdfPath);
       ref.read(recentsProvider.notifier).recordOpened(widget.pdfPath);
@@ -79,133 +95,40 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   @override
   void dispose() {
-    _autoHideTimer?.cancel();
+    _docCtrl.dispose(); // disposes _sfDocument (#10)
+    _barCtrl.dispose();
     super.dispose();
   }
 
   // ---------------------------------------------------------------------------
-  // Document lifecycle
+  // Document lifecycle — delegate to ReaderDocumentController (#24)
   // ---------------------------------------------------------------------------
 
-  void _onViewerReady(PdfDocument doc, PdfViewerController controller) async {
-    final total = doc.pages.length;
-    setState(() => _totalPages = total);
-
-    await ref
-        .read(readerNotifierProvider.notifier)
-        .onDocumentLoaded(pdfId: widget.pdfPath, totalPages: total);
-
-    final resumePage = ref.read(readerNotifierProvider).resumePage;
-    if (resumePage > 1 && mounted) {
-      await _pdfController.goToPage(pageNumber: resumePage);
-    }
-
-    ref
-        .read(annotationNotifierProvider.notifier)
-        .loadForPage(
-          widget.pdfPath,
-          _currentPage,
-          window:
-              ref.read(appSettingsProvider).scrollDirection ==
-                  ScrollDirection.continuous
-              ? 3
-              : 1,
-        );
-
-    _loadSfDocument();
-  }
-
-  Future<void> _loadSfDocument() async {
-    try {
-      if (_isAsset) {
-        final bytes = await DefaultAssetBundle.of(
-          // ignore: use_build_context_synchronously
-          context,
-        ).load(widget.pdfPath);
-        if (mounted) {
-          setState(() {
-            _sfDocument = sf_pdf.PdfDocument(
-              inputBytes: bytes.buffer.asUint8List(),
-            );
-          });
-        }
-      } else {
-        final bytes = await File(widget.pdfPath).readAsBytes();
-        if (mounted) {
-          setState(() => _sfDocument = sf_pdf.PdfDocument(inputBytes: bytes));
-        }
-      }
-    } catch (_) {
-      // TOC/text extraction is best-effort — failure is non-fatal.
-    }
-  }
+  Future<void> _onViewerReady(
+    PdfDocument doc,
+    PdfViewerController controller,
+  ) => _docCtrl.onViewerReady(doc, context);
 
   void _onPageChanged(int? page) {
     if (page == null) return;
-    setState(() {
-      _currentPage = page;
-      _updateBookmarkState();
-    });
-    ref.read(readerNotifierProvider.notifier).onPageChanged(page);
-    ref
-        .read(annotationNotifierProvider.notifier)
-        .loadForPage(
-          widget.pdfPath,
-          page,
-          window:
-              ref.read(appSettingsProvider).scrollDirection ==
-                  ScrollDirection.continuous
-              ? 3
-              : 1,
-        );
+    _docCtrl.onPageChanged(page);
   }
 
   // ---------------------------------------------------------------------------
-  // Bar visibility
+  // Bar visibility — delegate to ReaderBarController (#24)
   // ---------------------------------------------------------------------------
 
-  void _toggleBars() {
-    if (_annotating) return;
-    setState(() => _barsVisible = !_barsVisible);
-    if (_barsVisible) {
-      _scheduleAutoHide();
-    } else {
-      _autoHideTimer?.cancel();
-    }
-  }
-
-  void _showBars() {
-    if (_annotating) return;
-    setState(() => _barsVisible = true);
-    _scheduleAutoHide();
-  }
-
-  void _hideBars() {
-    _autoHideTimer?.cancel();
-    if (mounted) setState(() => _barsVisible = false);
-  }
-
-  void _scheduleAutoHide() {
-    _autoHideTimer?.cancel();
-    _autoHideTimer = Timer(const Duration(seconds: 4), _hideBars);
-  }
+  void _toggleBars() => _barCtrl.toggle(annotating: _annotating);
+  void _showBars() => _barCtrl.show(annotating: _annotating);
+  void _hideBars() => _barCtrl.hide();
+  void _scheduleAutoHide() => _barCtrl.scheduleAutoHide();
 
   // ---------------------------------------------------------------------------
-  // Annotation mode
+  // Annotation mode — delegate to ReaderAnnotationController (#24)
   // ---------------------------------------------------------------------------
 
-  void _enterAnnotationMode() {
-    _hideBars();
-    setState(() {
-      _annotating = true;
-      _activeTool = AnnotationTool.highlight;
-    });
-  }
-
-  void _exitAnnotationMode() {
-    setState(() => _annotating = false);
-    _showBars();
-  }
+  void _enterAnnotationMode() => _annotCtrl.enter();
+  void _exitAnnotationMode() => _annotCtrl.exit();
 
   Future<void> _performUndo() async {
     final message = await ref.read(annotationNotifierProvider.notifier).undo();
@@ -281,6 +204,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         .read(annotationNotifierProvider.notifier)
         .addBookmark(
           page: _currentPage,
+          pdfId: widget.pdfPath,
           label: label.trim().isEmpty ? null : label.trim(),
           color: color,
         );
@@ -301,7 +225,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   Future<void> _showJumpToPageDialog() async {
-    _autoHideTimer?.cancel();
+    _barCtrl.hide();
     final controller = TextEditingController(text: '$_currentPage');
     final page = await showDialog<int>(
       context: context,
@@ -366,6 +290,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 ref.read(appSettingsProvider.notifier).setScrollDirection(dir),
           ).then((_) => _showBars());
         },
+        onShare: () {
+          Navigator.of(ctx).pop();
+          sharePdf(context, widget.pdfPath);
+        },
       ),
     ).then((_) {
       if (mounted && !_annotating) _showBars();
@@ -399,21 +327,23 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 readingMode: readingMode,
               )
             : null,
-        body: _buildBody(readingMode),
+        body: _buildBody(settings, readingMode),
       ),
     );
   }
 
-  Widget _buildBody(ReadingMode readingMode) {
-    // Floating pill bar height + margin for page indicator clearance.
+  Widget _buildBody(AppSettings settings, ReadingMode readingMode) {
     const barHeight = 60.0;
     const barMargin = 12.0;
     final barVisible = _barsVisible && !_annotating;
-    final indicatorBottom = barVisible ? barHeight + barMargin + 8 : 16.0;
+    // Keep the indicator above the floating bar with a comfortable gap.
+    final indicatorBottom = barVisible
+        ? barHeight + barMargin + MediaQuery.of(context).padding.bottom + 12
+        : 16.0;
 
     return Stack(
       children: [
-        _ReadingModeFilter(mode: readingMode, child: _buildViewer()),
+        _ReadingModeFilter(mode: readingMode, child: _buildViewer(settings)),
 
         Positioned(
           bottom: indicatorBottom,
@@ -440,7 +370,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 if (tool == AnnotationTool.bookmark) {
                   _addBookmarkWithLabel();
                 } else {
-                  setState(() => _activeTool = tool);
+                  _annotCtrl.setTool(tool);
                 }
               },
               onExit: _exitAnnotationMode,
@@ -464,6 +394,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
           ),
 
+        // Long-press-activated scrollbar on the right edge.
         if (_totalPages > 1)
           Positioned(
             right: 0,
@@ -480,8 +411,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-  Widget _buildViewer() {
-    final settings = ref.read(appSettingsProvider);
+  // Settings are passed in from build() (which uses ref.watch) so changes to
+  // scroll direction or reading mode trigger a viewer rebuild (#8).
+  Widget _buildViewer(AppSettings settings) {
     final bool isPaginated =
         settings.scrollDirection == ScrollDirection.sideBySide ||
         settings.scrollDirection == ScrollDirection.bookFlip;
@@ -490,8 +422,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final params = PdfViewerParams(
       layoutPages: isPaginated ? _horizontalPageLayout : null,
       margin: 8,
-      onViewerReady: _onViewerReady,
+      // Wrap the async callback so errors are logged rather than swallowed
+      // (async void fire-and-forget would discard exceptions silently) (#3).
+      onViewerReady: (doc, ctrl) {
+        _onViewerReady(doc, ctrl).catchError((Object e, StackTrace s) {
+          developer.log(
+            'onViewerReady failed',
+            name: 'pdf_app.reader',
+            level: 1000,
+            error: e,
+            stackTrace: s,
+          );
+        });
+      },
       onPageChanged: _onPageChanged,
+      linkHandlerParams: PdfLinkHandlerParams(
+        onLinkTap: (link) {
+          if (link.dest != null) {
+            _pdfController.goToPage(pageNumber: link.dest!.pageNumber);
+          } else if (link.url != null) {
+            // External URLs are ignored — only internal navigation is handled.
+          }
+        },
+      ),
       onGeneralTap: (context, controller, details) {
         _toggleBars();
         return false;
@@ -712,10 +665,25 @@ class _NoteMarkerSheetState extends ConsumerState<_NoteMarkerSheet> {
   }
 
   Future<void> _load() async {
-    final entries = await ref
-        .read(annotationNotifierProvider.notifier)
-        .loadNoteEntries(widget.annotation.id);
-    if (mounted) setState(() => _entries = entries);
+    try {
+      final entries = await ref
+          .read(annotationNotifierProvider.notifier)
+          .loadNoteEntries(widget.annotation.id);
+      developer.log(
+        'note sheet _load: annotationId=${widget.annotation.id} entries=${entries.length}',
+        name: 'pdf_app.reader',
+      );
+      if (mounted) setState(() => _entries = entries);
+    } catch (e, s) {
+      developer.log(
+        'Failed to load note entries',
+        name: 'pdf_app.reader',
+        level: 1000,
+        error: e,
+        stackTrace: s,
+      );
+      if (mounted) setState(() => _entries = []);
+    }
   }
 
   Future<void> _addEntry() async {
@@ -1106,23 +1074,28 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(28),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 20, color: color),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: GoogleFonts.dmSans(
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-                color: color,
+      // Semantics makes each action button discoverable by screen readers (#14).
+      child: Semantics(
+        button: true,
+        label: label,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(28),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 20, color: color),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: GoogleFonts.dmSans(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1197,6 +1170,10 @@ class _ReadingModeFilter extends StatelessWidget {
 // Side scroll thumb
 // ---------------------------------------------------------------------------
 
+/// A thin scrollbar on the right edge that only activates after a long press.
+///
+/// Regular taps on the same side are ignored, so note markers beneath are
+/// fully accessible without interference.
 class _SideScrollThumb extends StatefulWidget {
   const _SideScrollThumb({
     required this.currentPage,
@@ -1213,13 +1190,16 @@ class _SideScrollThumb extends StatefulWidget {
 }
 
 class _SideScrollThumbState extends State<_SideScrollThumb> {
-  bool _dragging = false;
+  bool _active = false; // true after long press
   double _dragFraction = 0;
 
-  double get _fraction => _dragging
+  double get _fraction => _active
       ? _dragFraction
       : (widget.currentPage - 1) /
             (widget.totalPages - 1).clamp(1, double.infinity);
+
+  int _pageFromFraction(double f) =>
+      ((f * (widget.totalPages - 1)).round() + 1).clamp(1, widget.totalPages);
 
   @override
   Widget build(BuildContext context) {
@@ -1232,64 +1212,71 @@ class _SideScrollThumbState extends State<_SideScrollThumb> {
         final maxTop = trackHeight - thumbH;
         final top = (_fraction * maxTop).clamp(0.0, maxTop);
 
-        return GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onVerticalDragStart: (d) {
-            setState(() {
-              _dragging = true;
-              _dragFraction = (d.localPosition.dy / trackHeight).clamp(
-                0.0,
-                1.0,
-              );
-            });
-          },
-          onVerticalDragUpdate: (d) {
-            final f = (d.localPosition.dy / trackHeight).clamp(0.0, 1.0);
-            setState(() => _dragFraction = f);
-            final page = (f * (widget.totalPages - 1)).round() + 1;
-            widget.onPageRequested(page.clamp(1, widget.totalPages));
-          },
-          onVerticalDragEnd: (_) => setState(() => _dragging = false),
-          child: SizedBox(
-            width: _dragging ? 48 : 20,
-            child: Stack(
-              children: [
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 3,
-                    color: theme.colorScheme.outline.withValues(alpha: 0.15),
-                  ),
-                ),
-                Positioned(
-                  right: 0,
-                  top: top,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    width: _dragging ? 44 : 4,
-                    height: thumbH,
-                    decoration: BoxDecoration(
-                      color: _dragging
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.outline.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(_dragging ? 8 : 2),
+        return Semantics(
+          label: 'Scroll position',
+          slider: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            // Long press unlocks the scrubber.
+            onLongPressStart: (d) {
+              final f = (d.localPosition.dy / trackHeight).clamp(0.0, 1.0);
+              setState(() {
+                _active = true;
+                _dragFraction = f;
+              });
+              widget.onPageRequested(_pageFromFraction(f));
+            },
+            onLongPressMoveUpdate: (d) {
+              if (!_active) return;
+              final f = (d.localPosition.dy / trackHeight).clamp(0.0, 1.0);
+              setState(() => _dragFraction = f);
+              widget.onPageRequested(_pageFromFraction(f));
+            },
+            onLongPressEnd: (_) => setState(() => _active = false),
+            onLongPressCancel: () => setState(() => _active = false),
+            child: SizedBox(
+              width: _active ? 48 : 20,
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 3,
+                      color: theme.colorScheme.outline
+                          .withValues(alpha: _active ? 0.3 : 0.15),
                     ),
-                    alignment: Alignment.center,
-                    child: _dragging
-                        ? Text(
-                            '${((_dragFraction * (widget.totalPages - 1)).round() + 1).clamp(1, widget.totalPages)}',
-                            style: TextStyle(
-                              color: theme.colorScheme.onPrimary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          )
-                        : null,
                   ),
-                ),
-              ],
+                  Positioned(
+                    right: 0,
+                    top: top,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: _active ? 44 : 4,
+                      height: thumbH,
+                      decoration: BoxDecoration(
+                        color: _active
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.outline.withValues(alpha: 0.5),
+                        borderRadius:
+                            BorderRadius.circular(_active ? 8 : 2),
+                      ),
+                      alignment: Alignment.center,
+                      child: _active
+                          ? Text(
+                              '${_pageFromFraction(_dragFraction)}',
+                              style: TextStyle(
+                                color: theme.colorScheme.onPrimary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -1443,10 +1430,11 @@ class _BookmarkLabelDialogState extends State<_BookmarkLabelDialog> {
 // ---------------------------------------------------------------------------
 
 class _MoreMenu extends StatelessWidget {
-  const _MoreMenu({required this.onAnnotations, required this.onReadingMode});
+  const _MoreMenu({required this.onAnnotations, required this.onReadingMode, required this.onShare});
 
   final VoidCallback onAnnotations;
   final VoidCallback onReadingMode;
+  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -1464,6 +1452,11 @@ class _MoreMenu extends StatelessWidget {
             leading: const Icon(Icons.brightness_medium_outlined),
             title: Text('Reading mode', style: theme.textTheme.bodyMedium),
             onTap: onReadingMode,
+          ),
+          ListTile(
+            leading: const Icon(Icons.share_outlined),
+            title: Text('Share', style: theme.textTheme.bodyMedium),
+            onTap: onShare,
           ),
           const SizedBox(height: 8),
         ],

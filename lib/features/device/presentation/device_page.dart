@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:pdf_app/core/models/collection.dart';
 import 'package:pdf_app/core/models/file_status.dart';
 import 'package:pdf_app/core/theme/app_colors.dart';
+import 'package:pdf_app/core/utils/share_utils.dart';
 import 'package:pdf_app/features/home/presentation/home_shell.dart';
 import 'package:pdf_app/features/library/state/library_entry.dart';
 import 'package:pdf_app/features/library/state/library_providers.dart';
@@ -103,13 +104,13 @@ class DevicePageState extends ConsumerState<DevicePage> {
     }
     if (!mounted) return;
 
-    final collections = ref.read(collectionsProvider);
+    final collections = ref.read(collectionsProvider).value ?? [];
     final dest = targetId == null || targetId.isEmpty
         ? 'library'
         : collections
                 .firstWhere(
                   (c) => c.id == targetId,
-                  orElse: () => PdfCollection(id: '', name: 'collection'),
+                  orElse: () => const PdfCollection(id: '', name: 'collection'),
                 )
                 .name;
 
@@ -127,7 +128,7 @@ class DevicePageState extends ConsumerState<DevicePage> {
   /// Shows a dialog to pick an existing collection or create a new one.
   /// Returns null if cancelled, '' for root library, or a collection id.
   Future<String?> _pickOrCreateCollection() async {
-    final collections = ref.read(collectionsProvider);
+    final collections = ref.read(collectionsProvider).value ?? [];
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
@@ -159,7 +160,7 @@ class DevicePageState extends ConsumerState<DevicePage> {
     if (name == null || name.trim().isEmpty || !mounted) return null;
 
     await ref.read(collectionsProvider.notifier).addCollection(name.trim());
-    final updated = ref.read(collectionsProvider);
+    final updated = ref.read(collectionsProvider).value ?? [];
     return updated.last.id;
   }
 
@@ -194,7 +195,8 @@ class DevicePageState extends ConsumerState<DevicePage> {
 
   @override
   Widget build(BuildContext context) {
-    final all = ref.watch(deviceFilesProvider);
+    // .value ?? [] handles loading/error states from AsyncNotifier (#16).
+    final all = ref.watch(deviceFilesProvider).value ?? [];
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final secondary =
         isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
@@ -208,9 +210,10 @@ class DevicePageState extends ConsumerState<DevicePage> {
         ? null
         : ref
             .watch(collectionsProvider)
-            .firstWhere(
+            .value
+            ?.firstWhere(
               (c) => c.id == _activeCollectionId,
-              orElse: () => PdfCollection(id: '', name: 'collection'),
+              orElse: () => const PdfCollection(id: '', name: 'collection'),
             )
             .name;
 
@@ -322,8 +325,9 @@ class DevicePageState extends ConsumerState<DevicePage> {
 
     final libraryPaths = ref
         .watch(libraryEntriesProvider)
-        .map((e) => e.path)
-        .toSet();
+        .value
+        ?.map((e) => e.path)
+        .toSet() ?? {};
 
     return ListView.builder(
       padding: EdgeInsets.zero,
@@ -349,9 +353,68 @@ class DevicePageState extends ConsumerState<DevicePage> {
           },
           onLongPress: entry.status == FileStatus.ok
               ? () {
-                  setState(() {
-                    _selected.add(entry.path);
-                  });
+                  final libraryEntry = ref
+                      .read(libraryEntriesProvider)
+                      .value
+                      ?.where((e) => e.path == entry.path)
+                      .firstOrNull;
+                  showModalBottomSheet<void>(
+                    context: context,
+                    builder: (_) => SafeArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.open_in_new_outlined),
+                            title: const Text('Open'),
+                            onTap: () {
+                              Navigator.pop(context);
+                              ref
+                                  .read(libraryEntriesProvider.notifier)
+                                  .recordOpened(entry.path);
+                              context.push('/reader', extra: entry.path);
+                            },
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.share_outlined),
+                            title: const Text('Share'),
+                            onTap: () {
+                              Navigator.pop(context);
+                              sharePdf(context, entry.path);
+                            },
+                          ),
+                          if (libraryEntry != null)
+                            ListTile(
+                              leading:
+                                  const Icon(Icons.drive_file_rename_outline),
+                              title: const Text('Rename'),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                final newName = await showRenameDialog(
+                                  context,
+                                  currentName: libraryEntry.name,
+                                );
+                                if (newName == null ||
+                                    newName.trim().isEmpty) {
+                                  return;
+                                }
+                                await ref
+                                    .read(libraryEntriesProvider.notifier)
+                                    .renameFile(libraryEntry.id, newName);
+                              },
+                            ),
+                          ListTile(
+                            leading: const Icon(Icons.add_outlined),
+                            title: const Text('Select'),
+                            onTap: () {
+                              Navigator.pop(context);
+                              setState(() => _selected.add(entry.path));
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
                 }
               : null,
         );

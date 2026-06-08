@@ -1,5 +1,4 @@
 import 'dart:developer' as developer;
-import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,8 +20,7 @@ import 'package:pdf_app/core/providers.dart';
 ///
 /// Loads annotations for a window of pages around the current page.
 /// In continuous mode callers pass a larger [window] to cover all visible pages.
-class AnnotationNotifier
-    extends Notifier<Map<int, List<Annotation>>> {
+class AnnotationNotifier extends Notifier<Map<int, List<Annotation>>> {
   late final AnnotationDao _dao;
   late final NoteEntryDao _noteEntryDao;
 
@@ -62,14 +60,12 @@ class AnnotationNotifier
   void addHighlight({
     required List<RelativeRectModel> rects,
     required int page,
-    required String pdfId,
     AnnotationColor color = AnnotationColor.yellow,
     String? selectedText,
     String? pdfFingerprint,
   }) {
     _addAnnotation(
       _build(
-        pdfId: pdfId,
         page: page,
         type: AnnotationType.highlight,
         rects: rects,
@@ -86,60 +82,34 @@ class AnnotationNotifier
   /// `0.0` for the left edge or `1.0` for the right edge; [RelativeRectModel.top]
   /// is the vertical fraction of the tap (0–1).
   /// The initial note text is stored as the first [NoteEntry].
-  Future<void> addNote({
+  void addNote({
     required RelativeRectModel edgePosition,
     required String initialText,
     required int page,
-    required String pdfId,
     AnnotationColor color = AnnotationColor.yellow,
-  }) async {
+  }) {
     final annotation = _build(
-      pdfId: pdfId,
       page: page,
       type: AnnotationType.note,
       rects: [edgePosition],
       color: color,
     );
-    // Add to in-memory state immediately, then persist both the annotation
-    // and the initial entry in order — entry has a FK on the annotation row.
-    final page0 = annotation.page;
-    state = {
-      ...state,
-      page0: [...(state[page0] ?? []), annotation],
-    };
-    _undoStack.add(annotation.id);
-    if (_undoStack.length > _maxUndoDepth) _undoStack.removeAt(0);
-    _syncCanUndo();
-
-    // Persist annotation first, then the note entry so the FK is satisfied.
-    await _saveAsync(annotation);
-    developer.log(
-      'addNote: saved annotation id=${annotation.id} pdfId=${annotation.pdfId} page=${annotation.page}',
-      name: 'pdf_app.annotation',
+    _addAnnotation(annotation);
+    final entry = NoteEntry(
+      id: uuid.v4(),
+      annotationId: annotation.id,
+      text: initialText,
+      createdAt: DateTime.now(),
     );
-    await _saveNoteEntry(
-      NoteEntry(
-        id: uuid.v4(),
-        annotationId: annotation.id,
-        text: initialText,
-        createdAt: DateTime.now(),
-      ),
-      annotation.id,
-    );
-  }
-
-  Future<void> _saveNoteEntry(NoteEntry entry, String annotationId) async {
-    try {
-      await _noteEntryDao.insert(entry);
-    } catch (e, s) {
+    _noteEntryDao.insert(entry).catchError((Object e, StackTrace s) {
       developer.log(
-        'Failed to save note entry for $annotationId',
+        'Failed to save note entry for ${annotation.id}',
         name: 'pdf_app.annotation',
         level: 1000,
         error: e,
         stackTrace: s,
       );
-    }
+    });
   }
 
   /// Adds a new timestamped entry to an existing note annotation.
@@ -161,13 +131,11 @@ class AnnotationNotifier
   /// Creates a new bookmark annotation (no rects).
   void addBookmark({
     required int page,
-    required String pdfId,
     String? label,
     AnnotationColor color = AnnotationColor.yellow,
   }) {
     _addAnnotation(
       _build(
-        pdfId: pdfId,
         page: page,
         type: AnnotationType.bookmark,
         label: label ?? 'Page $page',
@@ -233,7 +201,6 @@ class AnnotationNotifier
 
   Annotation _build({
     required int page,
-    required String pdfId,
     required AnnotationType type,
     List<RelativeRectModel> rects = const [],
     String? selectedText,
@@ -245,7 +212,7 @@ class AnnotationNotifier
     final now = DateTime.now();
     return Annotation(
       id: uuid.v4(),
-      pdfId: pdfId,
+      pdfId: _currentPdfId,
       page: page,
       type: type,
       rects: rects,
@@ -268,7 +235,7 @@ class AnnotationNotifier
     _undoStack.add(annotation.id);
     if (_undoStack.length > _maxUndoDepth) _undoStack.removeAt(0);
     _syncCanUndo();
-    unawaited(_saveAsync(annotation));
+    _saveAsync(annotation);
   }
 
   Map<int, List<Annotation>> _removeFromState(
@@ -282,9 +249,6 @@ class AnnotationNotifier
   }
 
   /// Replaces loaded page range while preserving pages outside the window.
-  ///
-  /// Evicts pages more than 10 pages outside the current range to prevent the
-  /// state map growing without bound on long scrolling sessions (#7).
   Map<int, List<Annotation>> _mergeIntoState(
     Map<int, List<Annotation>> current,
     List<Annotation> loaded,
@@ -295,15 +259,11 @@ class AnnotationNotifier
     for (final a in loaded) {
       (byPage[a.page] ??= []).add(a);
     }
-    const evictionPadding = 10;
-    final keepStart = startPage - evictionPadding;
-    final keepEnd = endPage + evictionPadding;
-    // Evict pages outside the keep window; update the loaded range.
-    return {
-      for (final e in current.entries)
-        if (e.key >= keepStart && e.key <= keepEnd) e.key: e.value,
-      for (var p = startPage; p <= endPage; p++) p: byPage[p] ?? [],
-    };
+    final updated = Map<int, List<Annotation>>.from(current);
+    for (var p = startPage; p <= endPage; p++) {
+      updated[p] = byPage[p] ?? [];
+    }
+    return updated;
   }
 
   void _mutateAnnotation(String id, Annotation Function(Annotation) mutate) {
@@ -312,7 +272,7 @@ class AnnotationNotifier
         entry.key: entry.value.map((a) {
           if (a.id != id) return a;
           final updated = mutate(a);
-          unawaited(_saveAsync(updated));
+          _saveAsync(updated);
           return updated;
         }).toList(),
     };
@@ -322,12 +282,8 @@ class AnnotationNotifier
     ref.read(canUndoAnnotationProvider.notifier).setValue(canUndo);
   }
 
-  // Declared Future<void> so errors propagate; called with unawaited() to
-  // make the fire-and-forget intent explicit and avoid mixed async styles (#23).
-  Future<void> _saveAsync(Annotation annotation) async {
-    try {
-      await _dao.upsert(annotation);
-    } catch (e, s) {
+  void _saveAsync(Annotation annotation) {
+    _dao.upsert(annotation).catchError((Object e, StackTrace s) {
       developer.log(
         'Failed to save annotation ${annotation.id}',
         name: 'pdf_app.annotation',
@@ -335,6 +291,6 @@ class AnnotationNotifier
         error: e,
         stackTrace: s,
       );
-    }
+    });
   }
 }

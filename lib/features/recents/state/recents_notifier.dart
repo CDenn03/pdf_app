@@ -5,14 +5,17 @@ import 'package:pdf_app/core/services/recents_service.dart';
 
 export 'package:pdf_app/core/services/recents_service.dart' show RecentEntry;
 
+/// Provider typed to the abstract interface so tests can swap in a fake (#18).
+final recentsStoreProvider = Provider<RecentsStore>((ref) => RecentsService());
+
 /// Notifier that tracks all recently opened PDFs, including files not
-/// in the library. Persisted across restarts via [RecentsService].
+/// in the library. Persisted across restarts via [RecentsStore].
 class RecentsNotifier extends Notifier<List<RecentEntry>> {
-  late final RecentsService _service;
+  late final RecentsStore _service;
 
   @override
   List<RecentEntry> build() {
-    _service = RecentsService();
+    _service = ref.read(recentsStoreProvider);
     _load();
     return [];
   }

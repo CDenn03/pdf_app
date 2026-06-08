@@ -113,7 +113,7 @@ void main() {
     });
 
     test('bookmark annotation has empty rects', () async {
-      final bookmark = Annotation(
+      const bookmark = Annotation(
         id: 'bookmark-1',
         pdfId: 'pdf-1',
         page: 3,
@@ -128,12 +128,12 @@ void main() {
     });
 
     test('note annotation has rects and text', () async {
-      final note = Annotation(
+      const note = Annotation(
         id: 'note-1',
         pdfId: 'pdf-1',
         page: 2,
         type: AnnotationType.note,
-        rects: const [
+        rects: [
           RelativeRectModel(top: 0.3, left: 0.2, bottom: 0.35, right: 0.25),
         ],
         text: 'Important point here',

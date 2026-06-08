@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:async' show unawaited;
+import 'dart:developer' as developer;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:pdf_app/core/models/annotation.dart';
@@ -67,10 +70,45 @@ class _AnnotationPanelContentState
   }
 
   Future<void> _load() async {
-    final annotations = await ref
-        .read(annotationNotifierProvider.notifier)
-        .loadAllForPdf(widget.pdfId);
-    if (mounted) setState(() => _annotations = annotations);
+    try {
+      final fromDb = await ref
+          .read(annotationNotifierProvider.notifier)
+          .loadAllForPdf(widget.pdfId);
+
+      final inMemoryMap = ref.read(annotationNotifierProvider);
+      final inMemory = inMemoryMap.values
+          .expand((list) => list)
+          .where((a) => a.pdfId == widget.pdfId && !a.isDeleted);
+
+      developer.log(
+        'panel _load: pdfId="${widget.pdfId}" '
+        'fromDb=${fromDb.length} '
+        'inMemoryPages=${inMemoryMap.keys.toList()} '
+        'inMemoryMatched=${inMemory.length}',
+        name: 'pdf_app.annotation_panel',
+      );
+
+      final merged = {for (final a in fromDb) a.id: a};
+      for (final a in inMemory) {
+        merged[a.id] = a;
+      }
+
+      final result = merged.values
+          .where((a) => !a.isDeleted)
+          .toList()
+        ..sort((a, b) => a.page.compareTo(b.page));
+
+      if (mounted) setState(() => _annotations = result);
+    } catch (e, s) {
+      developer.log(
+        'Failed to load annotations',
+        name: 'pdf_app.annotation_panel',
+        level: 1000,
+        error: e,
+        stackTrace: s,
+      );
+      if (mounted) setState(() => _annotations = []);
+    }
   }
 
   @override
@@ -113,7 +151,7 @@ class _AnnotationPanelContentState
                   await ref
                       .read(annotationNotifierProvider.notifier)
                       .removeAnnotation(id);
-                  _load();
+                  unawaited(_load());
                 },
               );
             }).toList(),

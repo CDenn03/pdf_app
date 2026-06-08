@@ -26,6 +26,18 @@ class AppSettings {
     scrollDirection: scrollDirection ?? this.scrollDirection,
     themeMode: themeMode ?? this.themeMode,
   );
+
+  // == and hashCode are required so that Riverpod can detect when a copyWith
+  // produces an identical value and skip downstream rebuilds (#5).
+  @override
+  bool operator ==(Object other) =>
+      other is AppSettings &&
+      other.readingMode == readingMode &&
+      other.scrollDirection == scrollDirection &&
+      other.themeMode == themeMode;
+
+  @override
+  int get hashCode => Object.hash(readingMode, scrollDirection, themeMode);
 }
 
 abstract class AppSettingsStore {

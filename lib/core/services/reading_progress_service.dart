@@ -48,5 +48,11 @@ class ReadingProgressService implements ReadingProgressStore {
     }
   }
 
-  String _key(String pdfId) => '$_prefix${pdfId.hashCode}';
+  // Use the sanitised path directly instead of hashCode. hashCode is not
+  // stable across Dart versions and can collide, silently overwriting one
+  // document's progress with another's (#2).
+  String _key(String pdfId) {
+    final safe = pdfId.replaceAll(RegExp(r'[^\w\-.]'), '_');
+    return '$_prefix$safe';
+  }
 }

@@ -5,28 +5,18 @@ abstract class DatabaseProvider {
   Future<Database> get database;
 }
 
-/// Singleton SQLite database helper.
+/// SQLite database helper.
 ///
-/// Schema version history:
-///   v1 — initial schema
-///   v2 — added color column
-///   v3 — added label column
-///   v4 — added selected_text, coordinate_version, created_at, updated_at
-///   v5 — replaced rect_* columns with rects JSON, added pdf_fingerprint;
-///         dropped text_run_start / text_run_end / coordinate_version
-///   v6 — added note_entries table for timestamped note entries
+/// The singleton pattern has been removed so Riverpod can own the lifetime
+/// (see databaseHelperProvider in providers.dart). Using static state caused
+/// the database handle to leak across tests and hot-restarts.
 class DatabaseHelper implements DatabaseProvider {
-  static final DatabaseHelper _instance = DatabaseHelper._internal();
-  static Database? _database;
-
-  factory DatabaseHelper() => _instance;
-
-  DatabaseHelper._internal();
+  // Instance field — not static — so each ProviderScope gets its own handle.
+  Database? _database;
 
   @override
   Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDatabase();
+    _database ??= await _initDatabase();
     return _database!;
   }
 
@@ -34,7 +24,7 @@ class DatabaseHelper implements DatabaseProvider {
     final dbPath = await getDatabasesPath();
     final path = p.join(dbPath, 'pdf_navigator.db');
 
-    return await openDatabase(
+    return openDatabase(
       path,
       version: 6,
       onCreate: _onCreate,
@@ -106,7 +96,6 @@ class DatabaseHelper implements DatabaseProvider {
       );
     }
     if (oldVersion < 5) {
-      // Encode existing single-rect columns into the new JSON rects column.
       await db.execute(
         "ALTER TABLE annotations ADD COLUMN rects TEXT NOT NULL DEFAULT '[]'",
       );

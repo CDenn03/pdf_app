@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:pdf_app/core/constants.dart';
@@ -25,6 +26,7 @@ final GoRouter appRouter = GoRouter(
       name: 'collection',
       builder: (context, state) => CollectionScreen(
         collectionId: state.pathParameters['id'],
+        onAddBook: state.extra as VoidCallback?,
       ),
     ),
     GoRoute(

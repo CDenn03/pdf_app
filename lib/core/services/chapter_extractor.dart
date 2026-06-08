@@ -228,7 +228,7 @@ class ChapterExtractor {
 
     // Fallback: scan early pages for isolated small numbers.
     for (int pdf = 1; pdf <= maxPage.clamp(0, 50); pdf++) {
-      for (final line in byPage[pdf] ?? []) {
+      for (final line in byPage[pdf] ?? <String>[]) {
         final t = line.trim();
         if (!RegExp(r'^\d{1,3}$').hasMatch(t)) continue;
         final printed = int.tryParse(t);
@@ -259,7 +259,7 @@ class ChapterExtractor {
   // ------------------------------------------------------------------
 
   static List<DetectedChapter> _extractByHeuristics(
-    List<dynamic> lines,
+    List<TextLine> lines,
     Map<int, List<String>> byPage,
     int maxPage,
   ) {
@@ -281,7 +281,7 @@ class ChapterExtractor {
 
     final sizes = filtered
         .where((l) => l.fontSize > 0)
-        .map<double>((l) => l.fontSize as double)
+        .map<double>((l) => l.fontSize)
         .toList()
       ..sort();
     if (sizes.isEmpty) return [];
@@ -301,7 +301,7 @@ class ChapterExtractor {
 
       final isKeyword = _matchesHeadingKeyword(text);
       final isLargeFont = line.fontSize >= threshold;
-      final isBold = (line.fontStyle as List).contains(PdfFontStyle.bold);
+      final isBold = line.fontStyle.contains(PdfFontStyle.bold);
 
       if (!isKeyword && !isLargeFont && !isBold) continue;
       if (!isKeyword && isBold && text.length > 60) continue;
@@ -309,7 +309,7 @@ class ChapterExtractor {
       int depth = 0;
       if (headingSizes.isNotEmpty) {
         final tier = headingSizes.indexWhere(
-          (s) => (s - (line.fontSize as double)).abs() < 0.5,
+          (s) => (s - line.fontSize).abs() < 0.5,
         );
         if (tier >= 0) depth = tier.clamp(0, 2);
       }
@@ -319,7 +319,7 @@ class ChapterExtractor {
         text: text,
         page: line.pageIndex + 1,
         depth: depth,
-        fontSize: line.fontSize as double,
+        fontSize: line.fontSize,
       ));
     }
 
@@ -335,7 +335,7 @@ class ChapterExtractor {
   // HELPERS
   // ------------------------------------------------------------------
 
-  static Set<String> _findRepeatedTexts(List<dynamic> lines) {
+  static Set<String> _findRepeatedTexts(List<TextLine> lines) {
     final freq = <String, int>{};
     for (final l in lines) {
       final t = _norm(l.text);

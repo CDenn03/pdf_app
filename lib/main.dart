@@ -29,7 +29,11 @@ class _PdfNavigatorAppState extends ConsumerState<PdfNavigatorApp> {
 
   @override
   Widget build(BuildContext context) {
-    final themeMode = ref.watch(appSettingsProvider).themeMode;
+    // select() narrows the watch to themeMode only, so unrelated settings
+    // changes (readingMode, scrollDirection) do not rebuild MaterialApp (#22).
+    final themeMode = ref.watch(
+      appSettingsProvider.select((s) => s.themeMode),
+    );
 
     return MaterialApp.router(
       title: 'PDF Navigator',

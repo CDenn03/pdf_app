@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -56,6 +57,9 @@ class PersistedEntry {
 
 class LibraryPersistenceService implements LibraryPersistence {
   static const _entriesKey = 'library_entries_v1';
+  // Rapid successive mutations (e.g. bulk add) are batched into one write (#19).
+  static const _debounceDuration = Duration(milliseconds: 500);
+  Timer? _debounce;
 
   @override
   Future<List<PersistedEntry>> loadEntries() async {
@@ -81,6 +85,11 @@ class LibraryPersistenceService implements LibraryPersistence {
 
   @override
   Future<void> saveEntries(List<LibraryEntry> entries) async {
+    _debounce?.cancel();
+    _debounce = Timer(_debounceDuration, () => _write(entries));
+  }
+
+  Future<void> _write(List<LibraryEntry> entries) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final list = entries

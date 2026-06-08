@@ -10,13 +10,17 @@ import 'package:pdf_app/features/reader/state/reader_state.dart';
 export 'package:pdf_app/core/providers.dart';
 
 /// Provider for reader state (page, zoom, pdf info).
-final readerNotifierProvider = NotifierProvider<ReaderNotifier, ReaderState>(
+///
+/// autoDispose ensures state and the annotation map are released when the
+/// reader screen is popped, preventing memory accumulation across sessions (#6).
+final readerNotifierProvider =
+    NotifierProvider.autoDispose<ReaderNotifier, ReaderState>(
   ReaderNotifier.new,
 );
 
 /// Provider for annotation state, page-indexed.
 /// Use [AnnotationNotifier.annotationsForPage] to read a single page.
 final annotationNotifierProvider =
-    NotifierProvider<AnnotationNotifier, Map<int, List<Annotation>>>(
-      AnnotationNotifier.new,
-    );
+    NotifierProvider.autoDispose<AnnotationNotifier, Map<int, List<Annotation>>>(
+  AnnotationNotifier.new,
+);

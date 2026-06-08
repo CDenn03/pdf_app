@@ -78,6 +78,7 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
           ref.read(annotationNotifierProvider.notifier).addHighlight(
             rects: rects,
             page: widget.currentPage,
+            pdfId: widget.pdfId,
             color: _activeColor,
             selectedText: text,
           );
@@ -159,7 +160,7 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
       case AnnotationTool.note:
         await _addNote(details.localPosition);
       case AnnotationTool.bookmark:
-        _addBookmark();
+        await _addBookmark();
     }
   }
 
@@ -177,10 +178,11 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
       bottom: (position.dy / widget.pageSize.height).clamp(0.0, 1.0),
     );
 
-    ref.read(annotationNotifierProvider.notifier).addNote(
+    await ref.read(annotationNotifierProvider.notifier).addNote(
       edgePosition: edgePosition,
       initialText: text,
       page: widget.currentPage,
+      pdfId: widget.pdfId,
       color: _activeColor,
     );
   }
