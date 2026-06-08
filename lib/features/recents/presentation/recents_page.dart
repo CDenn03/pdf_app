@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:pdf_app/core/theme/app_colors.dart';
 import 'package:pdf_app/core/utils/share_utils.dart';
+import 'package:pdf_app/features/library/state/library_providers.dart';
 import 'package:pdf_app/features/recents/state/recents_notifier.dart';
 
 /// Shows all PDFs the user has opened recently, newest first.
@@ -93,6 +94,27 @@ class _RecentTile extends ConsumerWidget {
                 onTap: () {
                   Navigator.pop(context);
                   sharePdf(context, entry.path);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.drive_file_rename_outline),
+                title: const Text('Rename'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final libraryEntry = ref
+                      .read(libraryEntriesProvider)
+                      .value
+                      ?.where((e) => e.path == entry.path)
+                      .firstOrNull;
+                  if (libraryEntry == null || !context.mounted) return;
+                  final newName = await showRenameDialog(
+                    context,
+                    currentName: libraryEntry.name,
+                  );
+                  if (newName == null || newName.trim().isEmpty) return;
+                  await ref
+                      .read(libraryEntriesProvider.notifier)
+                      .renameFile(libraryEntry.id, newName);
                 },
               ),
             ],

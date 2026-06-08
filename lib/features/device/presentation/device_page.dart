@@ -353,6 +353,11 @@ class DevicePageState extends ConsumerState<DevicePage> {
           },
           onLongPress: entry.status == FileStatus.ok
               ? () {
+                  final libraryEntry = ref
+                      .read(libraryEntriesProvider)
+                      .value
+                      ?.where((e) => e.path == entry.path)
+                      .firstOrNull;
                   showModalBottomSheet<void>(
                     context: context,
                     builder: (_) => SafeArea(
@@ -378,6 +383,26 @@ class DevicePageState extends ConsumerState<DevicePage> {
                               sharePdf(context, entry.path);
                             },
                           ),
+                          if (libraryEntry != null)
+                            ListTile(
+                              leading:
+                                  const Icon(Icons.drive_file_rename_outline),
+                              title: const Text('Rename'),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                final newName = await showRenameDialog(
+                                  context,
+                                  currentName: libraryEntry.name,
+                                );
+                                if (newName == null ||
+                                    newName.trim().isEmpty) {
+                                  return;
+                                }
+                                await ref
+                                    .read(libraryEntriesProvider.notifier)
+                                    .renameFile(libraryEntry.id, newName);
+                              },
+                            ),
                           ListTile(
                             leading: const Icon(Icons.add_outlined),
                             title: const Text('Select'),

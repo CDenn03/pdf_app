@@ -255,6 +255,58 @@ class _RecentCard extends ConsumerWidget {
           ref.read(recentsProvider.notifier).recordOpened(entry.path);
           context.push('/reader', extra: entry.path);
         },
+        onLongPress: () {
+          final libraryEntry = ref
+              .read(libraryEntriesProvider)
+              .value
+              ?.where((e) => e.path == entry.path)
+              .firstOrNull;
+          showModalBottomSheet<void>(
+            context: context,
+            builder: (_) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.open_in_new_outlined),
+                    title: const Text('Open'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      ref
+                          .read(recentsProvider.notifier)
+                          .recordOpened(entry.path);
+                      context.push('/reader', extra: entry.path);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.share_outlined),
+                    title: const Text('Share'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      sharePdf(context, entry.path);
+                    },
+                  ),
+                  if (libraryEntry != null)
+                    ListTile(
+                      leading: const Icon(Icons.drive_file_rename_outline),
+                      title: const Text('Rename'),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        final newName = await showRenameDialog(
+                          context,
+                          currentName: libraryEntry.name,
+                        );
+                        if (newName == null || newName.trim().isEmpty) return;
+                        await ref
+                            .read(libraryEntriesProvider.notifier)
+                            .renameFile(libraryEntry.id, newName);
+                      },
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
         child: Container(
           width: 96,
           decoration: BoxDecoration(
@@ -734,6 +786,21 @@ class _EntryTile extends ConsumerWidget {
                     sharePdf(context, entry.path);
                   },
                 ),
+              ListTile(
+                leading: const Icon(Icons.drive_file_rename_outline),
+                title: const Text('Rename'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final newName = await showRenameDialog(
+                    context,
+                    currentName: entry.name,
+                  );
+                  if (newName == null || newName.trim().isEmpty) return;
+                  await ref
+                      .read(libraryEntriesProvider.notifier)
+                      .renameFile(entry.id, newName);
+                },
+              ),
               if (entry.isFavorite)
                 ListTile(
                   leading:

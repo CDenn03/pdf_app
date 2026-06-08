@@ -11,7 +11,7 @@ import 'package:pdf_app/features/library/state/library_providers.dart';
 import 'package:pdf_app/features/recents/state/recents_notifier.dart';
 
 /// Shows the files in a collection, or all favorites when [isFavorites] is true.
-class CollectionScreen extends ConsumerWidget {
+class CollectionScreen extends ConsumerStatefulWidget {
   const CollectionScreen({
     super.key,
     this.collectionId,
@@ -29,21 +29,42 @@ class CollectionScreen extends ConsumerWidget {
   final VoidCallback? onAddBook;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // .value ?? [] handles loading/error states from AsyncNotifier (#16).
+  ConsumerState<CollectionScreen> createState() => _CollectionScreenState();
+}
+
+class _CollectionScreenState extends ConsumerState<CollectionScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final allEntries = ref.watch(libraryEntriesProvider).value ?? [];
     final collections = ref.watch(collectionsProvider).value ?? [];
 
-    final title = isFavorites
+    final title = widget.isFavorites
         ? 'Favorites'
         : collections
-            .where((c) => c.id == collectionId)
-            .map((c) => c.name)
-            .firstOrNull ?? 'Collection';
+                .where((c) => c.id == widget.collectionId)
+                .map((c) => c.name)
+                .firstOrNull ??
+            'Collection';
 
-    final entries = isFavorites
+    final baseEntries = widget.isFavorites
         ? allEntries.where((e) => e.isFavorite).toList()
-        : allEntries.where((e) => e.collectionId == collectionId).toList();
+        : allEntries
+            .where((e) => e.collectionId == widget.collectionId)
+            .toList();
+
+    final q = _query.toLowerCase().trim();
+    final entries = q.isEmpty
+        ? baseEntries
+        : baseEntries.where((e) => e.name.toLowerCase().contains(q)).toList();
 
     return Scaffold(
       body: CustomScrollView(
@@ -62,22 +83,54 @@ class CollectionScreen extends ConsumerWidget {
               onPressed: () => context.pop(),
             ),
             actions: [
-              if (!isFavorites && onAddBook != null)
+              if (!widget.isFavorites && widget.onAddBook != null)
                 IconButton(
                   icon: const Icon(Icons.add),
                   tooltip: 'Add book',
                   onPressed: () {
                     context.pop();
-                    onAddBook!();
+                    widget.onAddBook!();
                   },
                 ),
             ],
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _query = v),
+                decoration: InputDecoration(
+                  hintText: 'Search…',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _query.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                        )
+                      : null,
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  filled: true,
+                ),
+              ),
+            ),
           ),
           if (entries.isEmpty)
             SliverFillRemaining(
               child: Center(
                 child: Text(
-                  isFavorites ? 'No favorites yet.' : 'No files here yet.',
+                  q.isNotEmpty
+                      ? 'No results for "$q"'
+                      : widget.isFavorites
+                          ? 'No favorites yet.'
+                          : 'No files here yet.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
               ),
@@ -85,7 +138,10 @@ class CollectionScreen extends ConsumerWidget {
           else
             SliverList(
               delegate: SliverChildBuilderDelegate(
-                (_, i) => _FileTile(entry: entries[i]),
+                (_, i) => _FileTile(
+                  entry: entries[i],
+                  inCollection: !widget.isFavorites,
+                ),
                 childCount: entries.length,
               ),
             ),
@@ -96,9 +152,77 @@ class CollectionScreen extends ConsumerWidget {
 }
 
 class _FileTile extends ConsumerWidget {
-  const _FileTile({required this.entry});
+  const _FileTile({required this.entry, required this.inCollection});
 
   final LibraryEntry entry;
+
+  /// Whether this tile is shown inside a named collection (not Favorites).
+  final bool inCollection;
+
+  void _showMenu(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (entry.status == FileStatus.ok) ...[
+              ListTile(
+                leading: const Icon(Icons.open_in_new_outlined),
+                title: const Text('Open'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _open(context, ref);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.share_outlined),
+                title: const Text('Share'),
+                onTap: () {
+                  Navigator.pop(context);
+                  sharePdf(context, entry.path);
+                },
+              ),
+            ],
+            ListTile(
+              leading: const Icon(Icons.drive_file_rename_outline),
+              title: const Text('Rename'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _rename(context, ref);
+              },
+            ),
+            if (inCollection)
+              ListTile(
+                leading: const Icon(Icons.remove_circle_outline),
+                title: const Text('Remove from collection'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await ref
+                      .read(libraryEntriesProvider.notifier)
+                      .moveToCollection(entry.id, null);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _open(BuildContext context, WidgetRef ref) {
+    ref.read(libraryEntriesProvider.notifier).recordOpened(entry.path);
+    ref.read(recentsProvider.notifier).recordOpened(entry.path);
+    context.push('/reader', extra: entry.path);
+  }
+
+  Future<void> _rename(BuildContext context, WidgetRef ref) async {
+    final newName = await showRenameDialog(context, currentName: entry.name);
+    if (newName == null || newName.trim().isEmpty) return;
+    await ref.read(libraryEntriesProvider.notifier).renameFile(
+          entry.id,
+          newName,
+        );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -113,47 +237,8 @@ class _FileTile extends ConsumerWidget {
     final theme = Theme.of(context);
 
     return InkWell(
-      onTap: unavailable
-          ? null
-          : () {
-              ref.read(libraryEntriesProvider.notifier).recordOpened(entry.path);
-              ref.read(recentsProvider.notifier).recordOpened(entry.path);
-              context.push('/reader', extra: entry.path);
-            },
-      onLongPress: unavailable
-          ? null
-          : () => showModalBottomSheet<void>(
-                context: context,
-                builder: (_) => SafeArea(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.open_in_new_outlined),
-                        title: const Text('Open'),
-                        onTap: () {
-                          Navigator.pop(context);
-                          ref
-                              .read(libraryEntriesProvider.notifier)
-                              .recordOpened(entry.path);
-                          ref
-                              .read(recentsProvider.notifier)
-                              .recordOpened(entry.path);
-                          context.push('/reader', extra: entry.path);
-                        },
-                      ),
-                      ListTile(
-                        leading: const Icon(Icons.share_outlined),
-                        title: const Text('Share'),
-                        onTap: () {
-                          Navigator.pop(context);
-                          sharePdf(context, entry.path);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+      onTap: unavailable ? null : () => _open(context, ref),
+      onLongPress: () => _showMenu(context, ref),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         child: Row(
