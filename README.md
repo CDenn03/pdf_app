@@ -2,6 +2,11 @@
 
 A clean, feature-rich PDF reader for Android built with Flutter. Manage your library, annotate documents, and read with a distraction-free immersive viewer.
 
+## Download the App
+
+You can download the latest production APK directly to your Android device here:
+👉 [Download Latest Android APK](https://github.com/YOUR_USERNAME/YOUR_REPO_NAME/releases/latest/download/app-release.apk)
+
 ## Features
 
 - **Library management** — add PDFs from your device, organise into collections, mark favourites, rename, and share files
