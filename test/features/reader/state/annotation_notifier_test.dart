@@ -95,21 +95,21 @@ void main() {
 
   group('addHighlight', () {
     test('adds annotation to state immediately', () {
-      notifier().addHighlight(rects: _rects, page: 1);
+      notifier().addHighlight(rects: _rects, page: 1, pdfId: 'pdf1');
       expect(allAnnotations().length, 1);
       expect(allAnnotations().first.type, AnnotationType.highlight);
       expect(allAnnotations().first.rects, _rects);
     });
 
     test('saves annotation via upsert asynchronously', () async {
-      notifier().addHighlight(rects: _rects, page: 1);
+      notifier().addHighlight(rects: _rects, page: 1, pdfId: 'pdf1');
       await Future<void>.delayed(Duration.zero);
       verify(() => dao.upsert(any())).called(1);
     });
 
     test('canUndo becomes true after adding', () {
       expect(notifier().canUndo, false);
-      notifier().addHighlight(rects: _rects, page: 1);
+      notifier().addHighlight(rects: _rects, page: 1, pdfId: 'pdf1');
       expect(notifier().canUndo, true);
     });
   });
@@ -120,6 +120,7 @@ void main() {
         edgePosition: _edgePos,
         initialText: 'hello',
         page: 1,
+        pdfId: 'pdf1',
       );
       expect(allAnnotations().first.type, AnnotationType.note);
       expect(allAnnotations().first.rects.first, _edgePos);
@@ -130,6 +131,7 @@ void main() {
         edgePosition: _edgePos,
         initialText: 'hello',
         page: 1,
+        pdfId: 'pdf1',
       );
       // Give the async insert a chance to run.
       await Future<void>.delayed(Duration.zero);
@@ -139,7 +141,7 @@ void main() {
 
   group('addBookmark', () {
     test('adds bookmark with empty rects', () {
-      notifier().addBookmark(page: 3);
+      notifier().addBookmark(page: 3, pdfId: 'pdf1');
       expect(allAnnotations().first.type, AnnotationType.bookmark);
       expect(allAnnotations().first.rects, isEmpty);
     });
@@ -147,7 +149,7 @@ void main() {
 
   group('removeAnnotation', () {
     test('removes from state and calls softDelete', () async {
-      notifier().addHighlight(rects: _rects, page: 1);
+      notifier().addHighlight(rects: _rects, page: 1, pdfId: 'pdf1');
       final id = allAnnotations().first.id;
 
       await notifier().removeAnnotation(id);
@@ -159,7 +161,7 @@ void main() {
 
   group('undo', () {
     test('removes the most recently added annotation', () async {
-      notifier().addHighlight(rects: _rects, page: 1);
+      notifier().addHighlight(rects: _rects, page: 1, pdfId: 'pdf1');
       expect(allAnnotations().length, 1);
 
       final message = await notifier().undo();
@@ -174,17 +176,18 @@ void main() {
     });
 
     test('canUndo becomes false after undoing the only annotation', () async {
-      notifier().addHighlight(rects: _rects, page: 1);
+      notifier().addHighlight(rects: _rects, page: 1, pdfId: 'pdf1');
       await notifier().undo();
       expect(notifier().canUndo, false);
     });
 
     test('undoes in LIFO order', () async {
-      notifier().addHighlight(rects: _rects, page: 1);
+      notifier().addHighlight(rects: _rects, page: 1, pdfId: 'pdf1');
       notifier().addNote(
         edgePosition: _edgePos,
         initialText: 'note',
         page: 1,
+        pdfId: 'pdf1',
       );
 
       final msg1 = await notifier().undo();
@@ -200,8 +203,8 @@ void main() {
 
   group('annotationsForPage', () {
     test('filters by page and excludes soft-deleted', () async {
-      notifier().addHighlight(rects: _rects, page: 1);
-      notifier().addHighlight(rects: _rects, page: 2);
+      notifier().addHighlight(rects: _rects, page: 1, pdfId: 'pdf1');
+      notifier().addHighlight(rects: _rects, page: 2, pdfId: 'pdf1');
 
       final page1 = notifier().annotationsForPage(1);
       expect(page1.length, 1);
@@ -215,6 +218,7 @@ void main() {
         edgePosition: _edgePos,
         initialText: 'original',
         page: 1,
+        pdfId: 'pdf1',
       );
       final id = allAnnotations().first.id;
 
