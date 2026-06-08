@@ -5,7 +5,8 @@ A clean, feature-rich PDF reader for Android built with Flutter. Manage your lib
 ## Download the App
 
 You can download the latest production APK directly to your Android device here:
-👉 [Download Latest Android APK](https://github.com/YOUR_USERNAME/YOUR_REPO_NAME/releases/latest/download/app-release.apk)
+👉 [Download Latest Android APK](https://github.com/CDenn03/pdf_app/releases/latest/download/app-release.apk)
+
 
 ## Features
 
