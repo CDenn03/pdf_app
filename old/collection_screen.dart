@@ -15,30 +15,26 @@ class CollectionScreen extends ConsumerWidget {
     super.key,
     this.collectionId,
     this.isFavorites = false,
-    this.onAddBook,
   }) : assert(
-          collectionId != null || isFavorites,
-          'Provide collectionId or set isFavorites',
-        );
+         collectionId != null || isFavorites,
+         'Provide collectionId or set isFavorites',
+       );
 
   final String? collectionId;
   final bool isFavorites;
 
-  /// Called when the user taps the add (+) button. Only shown for collections.
-  final VoidCallback? onAddBook;
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // .value ?? [] handles loading/error states from AsyncNotifier (#16).
-    final allEntries = ref.watch(libraryEntriesProvider).value ?? [];
-    final collections = ref.watch(collectionsProvider).value ?? [];
+    final allEntries = ref.watch(libraryEntriesProvider);
+    final collections = ref.watch(collectionsProvider);
 
     final title = isFavorites
         ? 'Favorites'
         : collections
-            .where((c) => c.id == collectionId)
-            .map((c) => c.name)
-            .firstOrNull ?? 'Collection';
+                  .where((c) => c.id == collectionId)
+                  .map((c) => c.name)
+                  .firstOrNull ??
+              'Collection';
 
     final entries = isFavorites
         ? allEntries.where((e) => e.isFavorite).toList()
@@ -60,17 +56,6 @@ class CollectionScreen extends ConsumerWidget {
               icon: const Icon(Icons.arrow_back),
               onPressed: () => context.pop(),
             ),
-            actions: [
-              if (!isFavorites && onAddBook != null)
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  tooltip: 'Add book',
-                  onPressed: () {
-                    context.pop();
-                    onAddBook!();
-                  },
-                ),
-            ],
           ),
           if (entries.isEmpty)
             SliverFillRemaining(
@@ -102,10 +87,12 @@ class _FileTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final secondary =
-        isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
-    final primary =
-        isDark ? AppColors.darkPrimaryText : AppColors.lightPrimaryText;
+    final secondary = isDark
+        ? AppColors.darkSecondaryText
+        : AppColors.lightSecondaryText;
+    final primary = isDark
+        ? AppColors.darkPrimaryText
+        : AppColors.lightPrimaryText;
     final colorIndex = entry.path.hashCode.abs();
     final gradient = AppColors.coverGradientAt(colorIndex);
     final unavailable = entry.status != FileStatus.ok;
@@ -115,7 +102,9 @@ class _FileTile extends ConsumerWidget {
       onTap: unavailable
           ? null
           : () {
-              ref.read(libraryEntriesProvider.notifier).recordOpened(entry.path);
+              ref
+                  .read(libraryEntriesProvider.notifier)
+                  .recordOpened(entry.path);
               ref.read(recentsProvider.notifier).recordOpened(entry.path);
               context.push('/reader', extra: entry.path);
             },
@@ -135,9 +124,7 @@ class _FileTile extends ConsumerWidget {
                         colors: gradient,
                       ),
                 color: unavailable
-                    ? (isDark
-                        ? AppColors.darkSurface
-                        : const Color(0xFFEEEEEE))
+                    ? (isDark ? AppColors.darkSurface : const Color(0xFFEEEEEE))
                     : null,
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -197,8 +184,8 @@ class _FavoriteButton extends ConsumerWidget {
         color: entry.isFavorite
             ? AppColors.brand
             : (Theme.of(context).brightness == Brightness.dark
-                ? AppColors.darkSecondaryText
-                : AppColors.lightSecondaryText),
+                  ? AppColors.darkSecondaryText
+                  : AppColors.lightSecondaryText),
       ),
       onPressed: () =>
           ref.read(libraryEntriesProvider.notifier).toggleFavorite(entry.id),

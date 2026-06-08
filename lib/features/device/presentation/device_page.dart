@@ -103,13 +103,13 @@ class DevicePageState extends ConsumerState<DevicePage> {
     }
     if (!mounted) return;
 
-    final collections = ref.read(collectionsProvider);
+    final collections = ref.read(collectionsProvider).value ?? [];
     final dest = targetId == null || targetId.isEmpty
         ? 'library'
         : collections
                 .firstWhere(
                   (c) => c.id == targetId,
-                  orElse: () => PdfCollection(id: '', name: 'collection'),
+                  orElse: () => const PdfCollection(id: '', name: 'collection'),
                 )
                 .name;
 
@@ -127,7 +127,7 @@ class DevicePageState extends ConsumerState<DevicePage> {
   /// Shows a dialog to pick an existing collection or create a new one.
   /// Returns null if cancelled, '' for root library, or a collection id.
   Future<String?> _pickOrCreateCollection() async {
-    final collections = ref.read(collectionsProvider);
+    final collections = ref.read(collectionsProvider).value ?? [];
     final choice = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
@@ -159,7 +159,7 @@ class DevicePageState extends ConsumerState<DevicePage> {
     if (name == null || name.trim().isEmpty || !mounted) return null;
 
     await ref.read(collectionsProvider.notifier).addCollection(name.trim());
-    final updated = ref.read(collectionsProvider);
+    final updated = ref.read(collectionsProvider).value ?? [];
     return updated.last.id;
   }
 
@@ -194,7 +194,8 @@ class DevicePageState extends ConsumerState<DevicePage> {
 
   @override
   Widget build(BuildContext context) {
-    final all = ref.watch(deviceFilesProvider);
+    // .value ?? [] handles loading/error states from AsyncNotifier (#16).
+    final all = ref.watch(deviceFilesProvider).value ?? [];
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final secondary =
         isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
@@ -208,9 +209,10 @@ class DevicePageState extends ConsumerState<DevicePage> {
         ? null
         : ref
             .watch(collectionsProvider)
-            .firstWhere(
+            .value
+            ?.firstWhere(
               (c) => c.id == _activeCollectionId,
-              orElse: () => PdfCollection(id: '', name: 'collection'),
+              orElse: () => const PdfCollection(id: '', name: 'collection'),
             )
             .name;
 
@@ -322,8 +324,9 @@ class DevicePageState extends ConsumerState<DevicePage> {
 
     final libraryPaths = ref
         .watch(libraryEntriesProvider)
-        .map((e) => e.path)
-        .toSet();
+        .value
+        ?.map((e) => e.path)
+        .toSet() ?? {};
 
     return ListView.builder(
       padding: EdgeInsets.zero,

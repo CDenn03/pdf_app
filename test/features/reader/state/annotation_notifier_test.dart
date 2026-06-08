@@ -72,7 +72,7 @@ void main() {
 
   group('loadForPage', () {
     test('loads annotations from dao and updates state', () async {
-      final annotation = Annotation(
+      const annotation = Annotation(
         id: 'abc',
         pdfId: 'pdf1',
         page: 2,

@@ -14,7 +14,14 @@ import 'package:pdf_app/core/theme/scroll_direction.dart';
 /// Core infrastructure providers shared across features.
 
 final databaseHelperProvider = Provider<DatabaseHelper>((ref) {
-  return DatabaseHelper();
+  final helper = DatabaseHelper();
+  // Close the database when the provider is disposed (e.g. in tests or on
+  // hot-restart) so the next ProviderScope gets a fresh connection (#1).
+  ref.onDispose(() async {
+    final db = await helper.database;
+    await db.close();
+  });
+  return helper;
 });
 
 final annotationDaoProvider = Provider<AnnotationDao>((ref) {
@@ -49,9 +56,11 @@ final appSettingsProvider = NotifierProvider<AppSettingsNotifier, AppSettings>(
 ///
 /// Loads from [AppSettingsStore] on build and persists on every mutation.
 class AppSettingsNotifier extends Notifier<AppSettings> {
+  late final Future<void> ready;
+
   @override
   AppSettings build() {
-    _load();
+    ready = _load();
     return const AppSettings();
   }
 

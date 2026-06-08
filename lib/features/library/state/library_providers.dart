@@ -1,5 +1,3 @@
-import 'dart:developer' as developer;
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
@@ -19,27 +17,29 @@ import 'package:pdf_app/features/reader/state/providers.dart';
 /// Manages the user's personal library: files they have explicitly added.
 ///
 /// Persisted across restarts via [LibraryPersistence].
-class LibraryNotifier extends Notifier<List<LibraryEntry>> {
+///
+/// Converted to [AsyncNotifier] so errors from the init load propagate to
+/// consumers via [AsyncValue.error] instead of being silently swallowed by
+/// an async-void fire-and-forget (#16).
+class LibraryNotifier extends AsyncNotifier<List<LibraryEntry>> {
   late final FileChecker _fileChecker;
   late final LibraryPersistence _persistence;
 
   @override
-  List<LibraryEntry> build() {
+  Future<List<LibraryEntry>> build() async {
     _fileChecker = ref.read(fileServiceProvider);
     _persistence = ref.read(libraryPersistenceProvider);
-    _init();
-    return [];
+    return _load();
   }
 
-  Future<void> _init() async {
+  Future<List<LibraryEntry>> _load() async {
     final persisted = await _persistence.loadEntries();
 
     if (persisted.isEmpty) {
-      await _addSample();
-      return;
+      return _withSample([]);
     }
 
-    final restored = await Future.wait(
+    return Future.wait(
       persisted.map((e) async {
         final status = await _fileChecker.checkFile(e.path);
         return LibraryEntry(
@@ -53,14 +53,13 @@ class LibraryNotifier extends Notifier<List<LibraryEntry>> {
         );
       }),
     );
-    state = restored;
   }
 
-  Future<void> _addSample() async {
-    if (state.any((e) => e.path == kSamplePdfPath)) return;
+  Future<List<LibraryEntry>> _withSample(List<LibraryEntry> current) async {
+    if (current.any((e) => e.path == kSamplePdfPath)) return current;
     final status = await _fileChecker.checkFile(kSamplePdfPath);
-    state = [
-      ...state,
+    final updated = [
+      ...current,
       LibraryEntry(
         id: uuid.v4(),
         name: 'sample.pdf',
@@ -68,18 +67,20 @@ class LibraryNotifier extends Notifier<List<LibraryEntry>> {
         status: status,
       ),
     ];
-    await _persist();
+    await _persistence.saveEntries(updated);
+    return updated;
   }
 
   /// Adds a file to the library. No-op if already present.
   Future<void> addFile(String path, {String? collectionId}) async {
-    if (state.any((e) => e.path == path)) {
+    final current = state.value ?? [];
+    if (current.any((e) => e.path == path)) {
       await refreshStatuses();
       return;
     }
     final status = await _fileChecker.checkFile(path);
-    state = [
-      ...state,
+    final updated = [
+      ...current,
       LibraryEntry(
         id: uuid.v4(),
         name: p.basename(path),
@@ -88,61 +89,67 @@ class LibraryNotifier extends Notifier<List<LibraryEntry>> {
         collectionId: collectionId,
       ),
     ];
+    state = AsyncData(updated);
     await _persist();
   }
 
   /// Removes a file from the library entirely.
   Future<void> removeFile(String id) async {
-    state = state.where((e) => e.id != id).toList();
+    final updated = (state.value ?? []).where((e) => e.id != id).toList();
+    state = AsyncData(updated);
     await _persist();
   }
 
   /// Moves a file to a different collection (or null = root).
   Future<void> moveToCollection(String entryId, String? collectionId) async {
-    state = state.map((e) {
+    final updated = (state.value ?? []).map((e) {
       return e.id == entryId ? e.copyWith(collectionId: collectionId) : e;
     }).toList();
+    state = AsyncData(updated);
     await _persist();
   }
 
   /// Toggles the favorite status of an entry.
   Future<void> toggleFavorite(String id) async {
-    state = state.map((e) {
+    final updated = (state.value ?? []).map((e) {
       return e.id == id ? e.copyWith(isFavorite: !e.isFavorite) : e;
     }).toList();
+    state = AsyncData(updated);
     await _persist();
   }
 
   /// Renames a library entry (display name only; does not rename the file).
   Future<void> renameFile(String id, String newName) async {
-    state = state.map((e) {
+    final updated = (state.value ?? []).map((e) {
       return e.id == id ? e.copyWith(name: newName) : e;
     }).toList();
+    state = AsyncData(updated);
     await _persist();
   }
 
   /// Records that the PDF at [path] was opened right now.
   Future<void> recordOpened(String path) async {
     final now = DateTime.now();
-    state = state.map((e) {
+    final updated = (state.value ?? []).map((e) {
       return e.path == path ? e.copyWith(lastOpenedAt: now) : e;
     }).toList();
+    state = AsyncData(updated);
     await _persist();
   }
 
   /// Re-checks file status for all entries.
   Future<void> refreshStatuses() async {
     final updated = await Future.wait(
-      state.map((e) async {
+      (state.value ?? []).map((e) async {
         final status = await _fileChecker.checkFile(e.path);
         return e.copyWith(status: status);
       }),
     );
-    state = updated;
+    state = AsyncData(updated);
     await _persist();
   }
 
-  Future<void> _persist() => _persistence.saveEntries(state);
+  Future<void> _persist() => _persistence.saveEntries(state.value ?? []);
 }
 
 // ---------------------------------------------------------------------------
@@ -152,42 +159,32 @@ class LibraryNotifier extends Notifier<List<LibraryEntry>> {
 /// Manages the list of all PDF files found on the device via storage scan.
 ///
 /// Not persisted — re-scanned on each app start.
-class DeviceFilesNotifier extends Notifier<List<LibraryEntry>> {
+class DeviceFilesNotifier extends AsyncNotifier<List<LibraryEntry>> {
   late final FileChecker _fileChecker;
   late final PdfScanner _scanner;
 
   @override
-  List<LibraryEntry> build() {
+  Future<List<LibraryEntry>> build() async {
     _fileChecker = ref.read(fileServiceProvider);
     _scanner = ref.read(pdfScannerProvider);
-    scan();
-    return [];
+    return scan();
   }
 
-  Future<void> scan() async {
-    try {
-      final paths = await _scanner.scanForPdfs();
-      final entries = await Future.wait(
-        paths.map((path) async {
-          final status = await _fileChecker.checkFile(path);
-          return LibraryEntry(
-            id: path,
-            name: p.basename(path),
-            path: path,
-            status: status,
-          );
-        }),
-      );
-      state = entries;
-    } catch (e, s) {
-      developer.log(
-        'device scan failed',
-        name: 'pdf_app.device_files',
-        level: 1000,
-        error: e,
-        stackTrace: s,
-      );
-    }
+  Future<List<LibraryEntry>> scan() async {
+    final paths = await _scanner.scanForPdfs();
+    final entries = await Future.wait(
+      paths.map((path) async {
+        final status = await _fileChecker.checkFile(path);
+        return LibraryEntry(
+          id: path,
+          name: p.basename(path),
+          path: path,
+          status: status,
+        );
+      }),
+    );
+    state = AsyncData(entries);
+    return entries;
   }
 }
 
@@ -195,35 +192,33 @@ class DeviceFilesNotifier extends Notifier<List<LibraryEntry>> {
 // Collections notifier
 // ---------------------------------------------------------------------------
 
-class CollectionsNotifier extends Notifier<List<PdfCollection>> {
+class CollectionsNotifier extends AsyncNotifier<List<PdfCollection>> {
   late final CollectionsService _service;
 
   @override
-  List<PdfCollection> build() {
+  Future<List<PdfCollection>> build() async {
     _service = ref.read(collectionsServiceProvider);
-    _load();
-    return [];
-  }
-
-  Future<void> _load() async {
-    state = await _service.load();
+    return _service.load();
   }
 
   Future<void> addCollection(String name) async {
-    state = [...state, PdfCollection(id: uuid.v4(), name: name)];
-    await _service.save(state);
+    final updated = <PdfCollection>[...(state.value ?? []), PdfCollection(id: uuid.v4(), name: name)];
+    state = AsyncData(updated);
+    await _service.save(updated);
   }
 
   Future<void> renameCollection(String id, String newName) async {
-    state = state.map((c) {
+    final updated = (state.value ?? []).map((c) {
       return c.id == id ? c.copyWith(name: newName) : c;
     }).toList();
-    await _service.save(state);
+    state = AsyncData(updated);
+    await _service.save(updated);
   }
 
   Future<void> deleteCollection(String id) async {
-    state = state.where((c) => c.id != id).toList();
-    await _service.save(state);
+    final updated = (state.value ?? []).where((c) => c.id != id).toList();
+    state = AsyncData(updated);
+    await _service.save(updated);
   }
 }
 
@@ -244,14 +239,16 @@ final pdfScannerProvider = Provider<PdfScanner>((ref) {
 });
 
 final libraryEntriesProvider =
-    NotifierProvider<LibraryNotifier, List<LibraryEntry>>(LibraryNotifier.new);
+    AsyncNotifierProvider<LibraryNotifier, List<LibraryEntry>>(
+      LibraryNotifier.new,
+    );
 
 final deviceFilesProvider =
-    NotifierProvider<DeviceFilesNotifier, List<LibraryEntry>>(
+    AsyncNotifierProvider<DeviceFilesNotifier, List<LibraryEntry>>(
       DeviceFilesNotifier.new,
     );
 
 final collectionsProvider =
-    NotifierProvider<CollectionsNotifier, List<PdfCollection>>(
+    AsyncNotifierProvider<CollectionsNotifier, List<PdfCollection>>(
       CollectionsNotifier.new,
     );

@@ -56,7 +56,7 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF073D42) : AppColors.brand;
-    final textColor = AppColors.onBrand;
+    const textColor = AppColors.onBrand;
     final subtitleColor = AppColors.onBrand.withValues(alpha: 0.75);
 
     return AnimatedBuilder(

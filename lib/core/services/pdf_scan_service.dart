@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -43,17 +44,22 @@ class PdfScanService implements PdfScanner {
   Future<bool> _requestPermission() async {
     if (!Platform.isAndroid) return true;
 
-    // MANAGE_EXTERNAL_STORAGE covers all Android versions and allows scanning
-    // the full file system. On Android 11+ (API 30+) it opens the
-    // "Allow management of all files" system screen if not yet granted.
-    // READ_EXTERNAL_STORAGE is requested as a fallback for older devices
-    // where MANAGE_EXTERNAL_STORAGE may not be available.
-    final manageStatus = await Permission.manageExternalStorage.status;
-    if (!manageStatus.isGranted) {
-      await Permission.manageExternalStorage.request();
+    // MANAGE_EXTERNAL_STORAGE is a restricted permission that triggers Play
+    // Store policy violations. Use READ_EXTERNAL_STORAGE (API < 33) or the
+    // granular READ_MEDIA_* permissions (API 33+) instead (#15).
+    //
+    // We check the Android version via the presence of READ_MEDIA_IMAGES
+    // permission: if requesting it returns a non-denied status the device is
+    // running API 33+.
+    final mediaStatus = await Permission.photos.status;
+    if (mediaStatus.isDenied) {
+      // API 33+ — request granular media permissions.
+      await Permission.photos.request();
     }
 
-    if (!(await Permission.manageExternalStorage.isGranted)) {
+    final storageStatus = await Permission.storage.status;
+    if (storageStatus.isDenied) {
+      // API < 33 fallback.
       await Permission.storage.request();
     }
 
@@ -111,7 +117,22 @@ class PdfScanService implements PdfScanner {
     return dirs.where((d) => seen.add(d.path)).toList();
   }
 
-  Future<void> _walk(Directory dir, List<String> results) async {
+  /// Public entry-point for tests — bypasses permission checks.
+  @visibleForTesting
+  Future<List<String>> walkDirectory(Directory root) async {
+    final results = <String>[];
+    await _walk(root, results);
+    return results;
+  }
+
+  Future<void> _walk(
+    Directory dir,
+    List<String> results, {
+    int depth = 0,
+  }) async {
+    // Guard against infinite recursion on deeply nested or circular filesystems
+    // and cap results to avoid runaway scans on large storage (#9).
+    if (depth > 8 || results.length > 5000) return;
     const skipDirs = {'proc', 'sys', 'dev', 'acct', 'cache', 'data'};
     const knownAppDirs = {
       'WhatsApp',
@@ -122,6 +143,7 @@ class PdfScanService implements PdfScanner {
 
     try {
       await for (final entity in dir.list(recursive: false)) {
+        if (results.length > 5000) return;
         if (entity is File) {
           if (entity.path.toLowerCase().endsWith('.pdf')) {
             results.add(entity.path);
@@ -132,7 +154,7 @@ class PdfScanService implements PdfScanner {
           final isSkipped = skipDirs.contains(name);
           final isKnownApp = knownAppDirs.contains(name);
           if (!isSkipped && (!isHidden || isKnownApp)) {
-            await _walk(entity, results);
+            await _walk(entity, results, depth: depth + 1);
           }
         }
       }

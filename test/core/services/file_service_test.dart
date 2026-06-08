@@ -10,7 +10,7 @@ void main() {
   late Directory tempDir;
 
   setUp(() async {
-    fileService = FileService();
+    fileService = const FileService();
     tempDir = await Directory.systemTemp.createTemp('file_service_test_');
   });
 

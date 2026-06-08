@@ -29,10 +29,20 @@ class RecentEntry {
 }
 
 /// Persists the list of recently opened PDFs (any file, library or not).
-class RecentsService {
+///
+/// Abstract so the notifier depends on the interface rather than the
+/// concrete class, making fakes trivial to inject in tests (#18).
+abstract class RecentsStore {
+  Future<List<RecentEntry>> load();
+  Future<void> recordOpened(String path, String name);
+}
+
+/// [SharedPreferences]-backed implementation of [RecentsStore].
+class RecentsService implements RecentsStore {
   static const _key = 'recents_all_v1';
   static const _maxEntries = 50;
 
+  @override
   Future<List<RecentEntry>> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -54,6 +64,7 @@ class RecentsService {
     }
   }
 
+  @override
   Future<void> recordOpened(String path, String name) async {
     try {
       final entries = await load();

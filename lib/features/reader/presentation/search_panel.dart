@@ -81,14 +81,14 @@ class _SearchPanelContentState extends State<_SearchPanelContent> {
     _search(_queryController.text);
   }
 
-  void _previous() async {
+  Future<void> _previous() async {
     await _searcher?.goToPrevMatch();
     if (mounted) {
       setState(() => _currentMatch = (_searcher?.currentIndex ?? -1) + 1);
     }
   }
 
-  void _next() async {
+  Future<void> _next() async {
     await _searcher?.goToNextMatch();
     if (mounted) {
       setState(() => _currentMatch = (_searcher?.currentIndex ?? -1) + 1);

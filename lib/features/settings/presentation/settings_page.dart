@@ -22,7 +22,7 @@ class SettingsPage extends ConsumerWidget {
 
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(
+        const SliverToBoxAdapter(
           child: GreetingHeader(subtitle: 'Preferences', title: 'Settings'),
         ),
         SliverToBoxAdapter(
@@ -163,7 +163,7 @@ class _OptionRow extends StatelessWidget {
               ),
             ),
             if (selected)
-              Icon(Icons.check_rounded, size: 20, color: AppColors.brand),
+              const Icon(Icons.check_rounded, size: 20, color: AppColors.brand),
           ],
         ),
       ),
