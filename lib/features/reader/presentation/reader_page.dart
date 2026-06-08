@@ -9,6 +9,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart' as sf_pdf;
 
 import 'package:pdf_app/core/constants.dart';
 import 'package:pdf_app/core/services/app_settings_service.dart';
+import 'package:pdf_app/core/utils/share_utils.dart';
 import 'package:pdf_app/core/models/annotation.dart' as app;
 import 'package:pdf_app/core/models/annotation_color.dart';
 import 'package:pdf_app/core/models/annotation_type.dart';
@@ -288,6 +289,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             onScrollDirectionChanged: (dir) =>
                 ref.read(appSettingsProvider.notifier).setScrollDirection(dir),
           ).then((_) => _showBars());
+        },
+        onShare: () {
+          Navigator.of(ctx).pop();
+          sharePdf(context, widget.pdfPath);
         },
       ),
     ).then((_) {
@@ -1425,10 +1430,11 @@ class _BookmarkLabelDialogState extends State<_BookmarkLabelDialog> {
 // ---------------------------------------------------------------------------
 
 class _MoreMenu extends StatelessWidget {
-  const _MoreMenu({required this.onAnnotations, required this.onReadingMode});
+  const _MoreMenu({required this.onAnnotations, required this.onReadingMode, required this.onShare});
 
   final VoidCallback onAnnotations;
   final VoidCallback onReadingMode;
+  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -1446,6 +1452,11 @@ class _MoreMenu extends StatelessWidget {
             leading: const Icon(Icons.brightness_medium_outlined),
             title: Text('Reading mode', style: theme.textTheme.bodyMedium),
             onTap: onReadingMode,
+          ),
+          ListTile(
+            leading: const Icon(Icons.share_outlined),
+            title: Text('Share', style: theme.textTheme.bodyMedium),
+            onTap: onShare,
           ),
           const SizedBox(height: 8),
         ],

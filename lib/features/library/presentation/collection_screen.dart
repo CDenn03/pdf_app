@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:pdf_app/core/models/file_status.dart';
 import 'package:pdf_app/core/theme/app_colors.dart';
+import 'package:pdf_app/core/utils/share_utils.dart';
 import 'package:pdf_app/features/library/state/library_entry.dart';
 import 'package:pdf_app/features/library/state/library_providers.dart';
 import 'package:pdf_app/features/recents/state/recents_notifier.dart';
@@ -119,6 +120,40 @@ class _FileTile extends ConsumerWidget {
               ref.read(recentsProvider.notifier).recordOpened(entry.path);
               context.push('/reader', extra: entry.path);
             },
+      onLongPress: unavailable
+          ? null
+          : () => showModalBottomSheet<void>(
+                context: context,
+                builder: (_) => SafeArea(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.open_in_new_outlined),
+                        title: const Text('Open'),
+                        onTap: () {
+                          Navigator.pop(context);
+                          ref
+                              .read(libraryEntriesProvider.notifier)
+                              .recordOpened(entry.path);
+                          ref
+                              .read(recentsProvider.notifier)
+                              .recordOpened(entry.path);
+                          context.push('/reader', extra: entry.path);
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.share_outlined),
+                        title: const Text('Share'),
+                        onTap: () {
+                          Navigator.pop(context);
+                          sharePdf(context, entry.path);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         child: Row(

@@ -9,6 +9,7 @@ import 'package:pdf_app/core/theme/app_colors.dart';
 import 'package:pdf_app/features/home/presentation/home_shell.dart';
 import 'package:pdf_app/features/library/state/library_entry.dart';
 import 'package:pdf_app/features/library/state/library_providers.dart';
+import 'package:pdf_app/core/utils/share_utils.dart';
 import 'package:pdf_app/features/recents/state/recents_notifier.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
@@ -722,6 +723,15 @@ class _EntryTile extends ConsumerWidget {
                   onTap: () {
                     Navigator.pop(context);
                     open();
+                  },
+                ),
+              if (!unavailable)
+                ListTile(
+                  leading: const Icon(Icons.share_outlined),
+                  title: const Text('Share'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    sharePdf(context, entry.path);
                   },
                 ),
               if (entry.isFavorite)

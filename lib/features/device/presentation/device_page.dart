@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:pdf_app/core/models/collection.dart';
 import 'package:pdf_app/core/models/file_status.dart';
 import 'package:pdf_app/core/theme/app_colors.dart';
+import 'package:pdf_app/core/utils/share_utils.dart';
 import 'package:pdf_app/features/home/presentation/home_shell.dart';
 import 'package:pdf_app/features/library/state/library_entry.dart';
 import 'package:pdf_app/features/library/state/library_providers.dart';
@@ -352,9 +353,43 @@ class DevicePageState extends ConsumerState<DevicePage> {
           },
           onLongPress: entry.status == FileStatus.ok
               ? () {
-                  setState(() {
-                    _selected.add(entry.path);
-                  });
+                  showModalBottomSheet<void>(
+                    context: context,
+                    builder: (_) => SafeArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.open_in_new_outlined),
+                            title: const Text('Open'),
+                            onTap: () {
+                              Navigator.pop(context);
+                              ref
+                                  .read(libraryEntriesProvider.notifier)
+                                  .recordOpened(entry.path);
+                              context.push('/reader', extra: entry.path);
+                            },
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.share_outlined),
+                            title: const Text('Share'),
+                            onTap: () {
+                              Navigator.pop(context);
+                              sharePdf(context, entry.path);
+                            },
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.add_outlined),
+                            title: const Text('Select'),
+                            onTap: () {
+                              Navigator.pop(context);
+                              setState(() => _selected.add(entry.path));
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
                 }
               : null,
         );
