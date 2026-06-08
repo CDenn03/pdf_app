@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:pdf_app/core/providers.dart';
@@ -10,6 +11,9 @@ import 'package:pdf_app/core/theme/app_theme.dart';
 import 'package:pdf_app/features/home/presentation/splash_screen.dart';
 
 void main() {
+  // Always use bundled fonts — never fetch from the network.
+  GoogleFonts.config.allowRuntimeFetching = false;
+
   if (Platform.isLinux || Platform.isWindows) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;

@@ -54,6 +54,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // Bookmark state for current page.
   bool _currentPageBookmarked = false;
 
+  /// False until [onViewerReady] fires — shows a loading overlay.
+  bool _documentReady = false;
+
   bool get _isAsset =>
       !widget.pdfPath.startsWith('/') && !widget.pdfPath.contains('://');
 
@@ -107,7 +110,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Future<void> _onViewerReady(
     PdfDocument doc,
     PdfViewerController controller,
-  ) => _docCtrl.onViewerReady(doc, context);
+  ) async {
+    await _docCtrl.onViewerReady(doc, context);
+    if (mounted) setState(() => _documentReady = true);
+  }
 
   void _onPageChanged(int? page) {
     if (page == null) return;
@@ -345,6 +351,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       children: [
         _ReadingModeFilter(mode: readingMode, child: _buildViewer(settings)),
 
+        if (!_documentReady)
+          const _DocumentLoadingOverlay(),
+
         Positioned(
           bottom: indicatorBottom,
           left: 0,
@@ -563,6 +572,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
 // ---------------------------------------------------------------------------
 // Annotation overlay helpers
+// ---------------------------------------------------------------------------
+
+/// Full-screen loading overlay shown while the PDF is being opened.
+class _DocumentLoadingOverlay extends StatelessWidget {
+  const _DocumentLoadingOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Colors.black54,
+      child: Center(child: CircularProgressIndicator.adaptive()),
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 
 /// Tap target for a note annotation marker on the page edge.
