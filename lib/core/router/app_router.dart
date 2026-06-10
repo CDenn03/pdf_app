@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:pdf_app/core/constants.dart';
-import 'package:pdf_app/features/home/presentation/home_shell.dart';
-import 'package:pdf_app/features/library/presentation/collection_screen.dart';
-import 'package:pdf_app/features/reader/presentation/reader_page.dart';
-import 'package:pdf_app/features/settings/presentation/settings_page.dart';
+import 'package:sefer/core/constants.dart';
+import 'package:sefer/features/home/presentation/home_shell.dart';
+import 'package:sefer/features/library/presentation/collection_screen.dart';
+import 'package:sefer/features/reader/presentation/reader_page.dart';
+import 'package:sefer/features/settings/presentation/settings_page.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',

@@ -1,6 +1,6 @@
 import 'dart:ui';
 
-import 'package:pdf_app/core/models/relative_rect_model.dart';
+import 'package:sefer/core/models/relative_rect_model.dart';
 
 /// Converts a [RelativeRectModel] (0.0–1.0 normalized) to an absolute [Rect]
 /// based on the rendered PDF page size.

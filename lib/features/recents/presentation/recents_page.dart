@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:pdf_app/core/theme/app_colors.dart';
-import 'package:pdf_app/core/utils/share_utils.dart';
-import 'package:pdf_app/features/library/state/library_providers.dart';
-import 'package:pdf_app/features/recents/state/recents_notifier.dart';
+import 'package:sefer/core/theme/app_colors.dart';
+import 'package:sefer/core/utils/share_utils.dart';
+import 'package:sefer/features/library/state/library_providers.dart';
+import 'package:sefer/features/recents/state/recents_notifier.dart';
 
 /// Shows all PDFs the user has opened recently, newest first.
 /// Includes files from outside the library.

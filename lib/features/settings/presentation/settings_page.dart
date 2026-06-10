@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:pdf_app/core/providers.dart';
-import 'package:pdf_app/core/theme/app_colors.dart';
-import 'package:pdf_app/core/theme/reading_mode.dart';
-import 'package:pdf_app/core/theme/scroll_direction.dart';
-import 'package:pdf_app/features/home/presentation/home_shell.dart';
+import 'package:sefer/core/providers.dart';
+import 'package:sefer/core/theme/app_colors.dart';
+import 'package:sefer/core/theme/reading_mode.dart';
+import 'package:sefer/core/theme/scroll_direction.dart';
+import 'package:sefer/features/home/presentation/home_shell.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key, this.bottomPadding = 0});

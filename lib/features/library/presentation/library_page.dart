@@ -3,14 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:pdf_app/core/models/collection.dart';
-import 'package:pdf_app/core/models/file_status.dart';
-import 'package:pdf_app/core/theme/app_colors.dart';
-import 'package:pdf_app/features/home/presentation/home_shell.dart';
-import 'package:pdf_app/features/library/state/library_entry.dart';
-import 'package:pdf_app/features/library/state/library_providers.dart';
-import 'package:pdf_app/core/utils/share_utils.dart';
-import 'package:pdf_app/features/recents/state/recents_notifier.dart';
+import 'package:sefer/core/models/collection.dart';
+import 'package:sefer/core/models/file_status.dart';
+import 'package:sefer/core/theme/app_colors.dart';
+import 'package:sefer/features/home/presentation/home_shell.dart';
+import 'package:sefer/features/library/state/library_entry.dart';
+import 'package:sefer/features/library/state/library_providers.dart';
+import 'package:sefer/core/utils/share_utils.dart';
+import 'package:sefer/features/recents/state/recents_notifier.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
   const LibraryPage({

@@ -3,8 +3,8 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:pdf_app/core/theme/reading_mode.dart';
-import 'package:pdf_app/core/theme/scroll_direction.dart';
+import 'package:sefer/core/theme/reading_mode.dart';
+import 'package:sefer/core/theme/scroll_direction.dart';
 
 class AppSettings {
   final ReadingMode readingMode;
@@ -74,7 +74,7 @@ class AppSettingsService implements AppSettingsStore {
     } catch (e, s) {
       developer.log(
         'Failed to load app settings',
-        name: 'pdf_app.settings',
+        name: 'sefer.settings',
         level: 900,
         error: e,
         stackTrace: s,
@@ -93,7 +93,7 @@ class AppSettingsService implements AppSettingsStore {
     } catch (e, s) {
       developer.log(
         'Failed to save app settings',
-        name: 'pdf_app.settings',
+        name: 'sefer.settings',
         level: 900,
         error: e,
         stackTrace: s,

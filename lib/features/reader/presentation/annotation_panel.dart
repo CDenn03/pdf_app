@@ -4,11 +4,11 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:pdf_app/core/models/annotation.dart';
-import 'package:pdf_app/core/models/annotation_color.dart';
-import 'package:pdf_app/core/models/annotation_type.dart';
-import 'package:pdf_app/features/reader/state/providers.dart';
-import 'package:pdf_app/shared/widgets/overlay_panel.dart';
+import 'package:sefer/core/models/annotation.dart';
+import 'package:sefer/core/models/annotation_color.dart';
+import 'package:sefer/core/models/annotation_type.dart';
+import 'package:sefer/features/reader/state/providers.dart';
+import 'package:sefer/shared/widgets/overlay_panel.dart';
 
 /// Shows the annotation panel as a bottom sheet with tabs.
 Future<void> showAnnotationPanel({
@@ -85,7 +85,7 @@ class _AnnotationPanelContentState
         'fromDb=${fromDb.length} '
         'inMemoryPages=${inMemoryMap.keys.toList()} '
         'inMemoryMatched=${inMemory.length}',
-        name: 'pdf_app.annotation_panel',
+        name: 'sefer.annotation_panel',
       );
 
       final merged = {for (final a in fromDb) a.id: a};
@@ -102,7 +102,7 @@ class _AnnotationPanelContentState
     } catch (e, s) {
       developer.log(
         'Failed to load annotations',
-        name: 'pdf_app.annotation_panel',
+        name: 'sefer.annotation_panel',
         level: 1000,
         error: e,
         stackTrace: s,

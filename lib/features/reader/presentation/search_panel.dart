@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
-import 'package:pdf_app/shared/widgets/overlay_panel.dart';
+import 'package:sefer/shared/widgets/overlay_panel.dart';
 
 /// Shows the in-document text search panel as a bottom sheet.
 ///

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:pdf_app/core/theme/app_colors.dart';
+import 'package:sefer/core/theme/app_colors.dart';
 
 /// Splash screen shown on app launch.
 ///

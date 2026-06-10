@@ -2,14 +2,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:pdf_app/core/database/annotation_dao.dart';
-import 'package:pdf_app/core/database/note_entry_dao.dart';
-import 'package:pdf_app/core/models/annotation.dart';
-import 'package:pdf_app/core/models/annotation_type.dart';
-import 'package:pdf_app/core/models/note_entry.dart';
-import 'package:pdf_app/core/models/relative_rect_model.dart';
-import 'package:pdf_app/features/reader/state/annotation_notifier.dart';
-import 'package:pdf_app/features/reader/state/providers.dart';
+import 'package:sefer/core/database/annotation_dao.dart';
+import 'package:sefer/core/database/note_entry_dao.dart';
+import 'package:sefer/core/models/annotation.dart';
+import 'package:sefer/core/models/annotation_type.dart';
+import 'package:sefer/core/models/note_entry.dart';
+import 'package:sefer/core/models/relative_rect_model.dart';
+import 'package:sefer/features/reader/state/annotation_notifier.dart';
+import 'package:sefer/features/reader/state/providers.dart';
 
 class MockAnnotationDao extends Mock implements AnnotationDao {}
 

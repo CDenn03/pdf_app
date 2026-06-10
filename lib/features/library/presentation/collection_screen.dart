@@ -3,12 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:pdf_app/core/models/file_status.dart';
-import 'package:pdf_app/core/theme/app_colors.dart';
-import 'package:pdf_app/core/utils/share_utils.dart';
-import 'package:pdf_app/features/library/state/library_entry.dart';
-import 'package:pdf_app/features/library/state/library_providers.dart';
-import 'package:pdf_app/features/recents/state/recents_notifier.dart';
+import 'package:sefer/core/models/file_status.dart';
+import 'package:sefer/core/theme/app_colors.dart';
+import 'package:sefer/core/utils/share_utils.dart';
+import 'package:sefer/features/library/state/library_entry.dart';
+import 'package:sefer/features/library/state/library_providers.dart';
+import 'package:sefer/features/recents/state/recents_notifier.dart';
 
 /// Shows the files in a collection, or all favorites when [isFavorites] is true.
 class CollectionScreen extends ConsumerStatefulWidget {

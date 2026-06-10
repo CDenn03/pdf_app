@@ -1,14 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:pdf_app/core/constants.dart';
-import 'package:pdf_app/core/models/collection.dart';
-import 'package:pdf_app/core/services/collections_service.dart';
-import 'package:pdf_app/core/services/file_service.dart';
-import 'package:pdf_app/core/services/library_persistence_service.dart';
-import 'package:pdf_app/core/services/pdf_scan_service.dart';
-import 'package:pdf_app/features/library/state/library_entry.dart';
-import 'package:pdf_app/features/reader/state/providers.dart';
+import 'package:sefer/core/constants.dart';
+import 'package:sefer/core/models/collection.dart';
+import 'package:sefer/core/services/collections_service.dart';
+import 'package:sefer/core/services/file_service.dart';
+import 'package:sefer/core/services/library_persistence_service.dart';
+import 'package:sefer/core/services/pdf_scan_service.dart';
+import 'package:sefer/features/library/state/library_entry.dart';
+import 'package:sefer/features/reader/state/providers.dart';
 
 // ---------------------------------------------------------------------------
 // Library notifier — manually curated files

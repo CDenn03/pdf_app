@@ -2,11 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:pdf_app/core/models/file_status.dart';
-import 'package:pdf_app/core/providers.dart';
-import 'package:pdf_app/core/services/file_service.dart';
-import 'package:pdf_app/core/services/library_persistence_service.dart';
-import 'package:pdf_app/features/library/state/library_providers.dart';
+import 'package:sefer/core/models/file_status.dart';
+import 'package:sefer/core/providers.dart';
+import 'package:sefer/core/services/file_service.dart';
+import 'package:sefer/core/services/library_persistence_service.dart';
+import 'package:sefer/features/library/state/library_providers.dart';
 
 class _MockFileChecker extends Mock implements FileChecker {}
 

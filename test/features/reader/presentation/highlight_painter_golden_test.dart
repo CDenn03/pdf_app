@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:pdf_app/core/models/annotation.dart';
-import 'package:pdf_app/core/models/annotation_color.dart';
-import 'package:pdf_app/core/models/annotation_type.dart';
-import 'package:pdf_app/core/models/relative_rect_model.dart';
-import 'package:pdf_app/features/reader/presentation/highlight_painter.dart';
+import 'package:sefer/core/models/annotation.dart';
+import 'package:sefer/core/models/annotation_color.dart';
+import 'package:sefer/core/models/annotation_type.dart';
+import 'package:sefer/core/models/relative_rect_model.dart';
+import 'package:sefer/features/reader/presentation/highlight_painter.dart';
 
 const _painterKey = ValueKey('highlight_painter');
 

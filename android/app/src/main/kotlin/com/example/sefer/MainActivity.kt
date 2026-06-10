@@ -1,4 +1,4 @@
-package com.example.pdf_app
+package com.example.sefer
 
 import io.flutter.embedding.android.FlutterActivity
 

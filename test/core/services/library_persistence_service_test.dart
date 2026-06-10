@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:pdf_app/core/models/file_status.dart';
-import 'package:pdf_app/core/services/library_persistence_service.dart';
-import 'package:pdf_app/features/library/state/library_entry.dart';
+import 'package:sefer/core/models/file_status.dart';
+import 'package:sefer/core/services/library_persistence_service.dart';
+import 'package:sefer/features/library/state/library_entry.dart';
 
 LibraryEntry _entry({
   required String id,

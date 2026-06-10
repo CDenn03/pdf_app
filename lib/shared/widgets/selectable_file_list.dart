@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:pdf_app/core/models/collection.dart';
-import 'package:pdf_app/core/models/file_status.dart';
-import 'package:pdf_app/features/library/state/library_entry.dart';
-import 'package:pdf_app/features/library/state/library_providers.dart';
+import 'package:sefer/core/models/collection.dart';
+import 'package:sefer/core/models/file_status.dart';
+import 'package:sefer/features/library/state/library_entry.dart';
+import 'package:sefer/features/library/state/library_providers.dart';
 
 /// Controller that lets a parent widget clear the selection from outside.
 class SelectableListController {

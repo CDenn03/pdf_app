@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart' show PdfViewerController;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
-import 'package:pdf_app/core/services/chapter_extractor.dart';
-import 'package:pdf_app/shared/widgets/overlay_panel.dart';
+import 'package:sefer/core/services/chapter_extractor.dart';
+import 'package:sefer/shared/widgets/overlay_panel.dart';
 
 /// Session-level chapter cache keyed by PDF path (pdfId).
 ///
@@ -80,7 +80,7 @@ class _TocPanelContentState extends State<_TocPanelContent> {
     } catch (e) {
       developer.log(
         'bookmark collection failed',
-        name: 'pdf_app.toc',
+        name: 'sefer.toc',
         level: 900,
         error: e,
       );
@@ -117,7 +117,7 @@ class _TocPanelContentState extends State<_TocPanelContent> {
     } catch (e, s) {
       developer.log(
         'chapter extraction failed',
-        name: 'pdf_app.toc',
+        name: 'sefer.toc',
         level: 900,
         error: e,
         stackTrace: s,

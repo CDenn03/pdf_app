@@ -55,7 +55,7 @@ class RecentsService implements RecentsStore {
     } catch (e, s) {
       developer.log(
         'recents load failed',
-        name: 'pdf_app.recents',
+        name: 'sefer.recents',
         level: 900,
         error: e,
         stackTrace: s,
@@ -81,7 +81,7 @@ class RecentsService implements RecentsStore {
     } catch (e, s) {
       developer.log(
         'recents save failed',
-        name: 'pdf_app.recents',
+        name: 'sefer.recents',
         level: 900,
         error: e,
         stackTrace: s,

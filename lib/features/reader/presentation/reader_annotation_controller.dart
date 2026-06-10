@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import 'package:pdf_app/features/reader/presentation/annotation_toolbar.dart';
+import 'package:sefer/features/reader/presentation/annotation_toolbar.dart';
 
 /// Owns annotation mode state and active tool selection (#24).
 class ReaderAnnotationController {

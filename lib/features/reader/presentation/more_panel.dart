@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'package:pdf_app/core/theme/reading_mode.dart';
-import 'package:pdf_app/core/theme/scroll_direction.dart';
-import 'package:pdf_app/shared/widgets/overlay_panel.dart';
+import 'package:sefer/core/theme/reading_mode.dart';
+import 'package:sefer/core/theme/scroll_direction.dart';
+import 'package:sefer/shared/widgets/overlay_panel.dart';
 
 /// Shows the "More" panel with reading mode and scroll direction options.
 Future<void> showMorePanel({

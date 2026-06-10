@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:pdf_app/core/services/reading_progress_service.dart';
+import 'package:sefer/core/services/reading_progress_service.dart';
 
 void main() {
   setUp(() {

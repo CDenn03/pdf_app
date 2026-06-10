@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'package:pdf_app/core/database/annotation_dao.dart';
-import 'package:pdf_app/core/models/annotation.dart';
-import 'package:pdf_app/core/models/annotation_type.dart';
-import 'package:pdf_app/core/models/relative_rect_model.dart';
+import 'package:sefer/core/database/annotation_dao.dart';
+import 'package:sefer/core/models/annotation.dart';
+import 'package:sefer/core/models/annotation_type.dart';
+import 'package:sefer/core/models/relative_rect_model.dart';
 
 const _rect = RelativeRectModel(top: 0.1, left: 0.1, bottom: 0.2, right: 0.9);
 

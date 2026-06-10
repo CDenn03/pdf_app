@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:pdf_app/core/providers.dart';
-import 'package:pdf_app/core/services/app_settings_service.dart';
-import 'package:pdf_app/core/theme/reading_mode.dart';
-import 'package:pdf_app/core/theme/scroll_direction.dart';
+import 'package:sefer/core/providers.dart';
+import 'package:sefer/core/services/app_settings_service.dart';
+import 'package:sefer/core/theme/reading_mode.dart';
+import 'package:sefer/core/theme/scroll_direction.dart';
 
 class _MockStore extends Mock implements AppSettingsStore {}
 

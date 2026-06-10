@@ -3,7 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:pdf_app/core/models/collection.dart';
+import 'package:sefer/core/models/collection.dart';
 
 /// Persists user-defined collections.
 class CollectionsService {
@@ -21,7 +21,7 @@ class CollectionsService {
     } catch (e, s) {
       developer.log(
         'collections load failed',
-        name: 'pdf_app.collections',
+        name: 'sefer.collections',
         level: 900,
         error: e,
         stackTrace: s,
@@ -40,7 +40,7 @@ class CollectionsService {
     } catch (e, s) {
       developer.log(
         'collections save failed',
-        name: 'pdf_app.collections',
+        name: 'sefer.collections',
         level: 900,
         error: e,
         stackTrace: s,

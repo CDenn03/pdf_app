@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:pdf_app/core/services/reading_progress_service.dart';
-import 'package:pdf_app/features/reader/state/reader_state.dart';
-import 'package:pdf_app/features/reader/state/providers.dart';
+import 'package:sefer/core/services/reading_progress_service.dart';
+import 'package:sefer/features/reader/state/reader_state.dart';
+import 'package:sefer/features/reader/state/providers.dart';
 
 /// In-memory fake that always returns page 1 and discards saves.
 class _FakeProgressStore implements ReadingProgressStore {

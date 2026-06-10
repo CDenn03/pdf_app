@@ -7,28 +7,28 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf_pdf;
 
-import 'package:pdf_app/core/constants.dart';
-import 'package:pdf_app/core/services/app_settings_service.dart';
-import 'package:pdf_app/core/utils/share_utils.dart';
-import 'package:pdf_app/core/models/annotation.dart' as app;
-import 'package:pdf_app/core/models/annotation_color.dart';
-import 'package:pdf_app/core/models/annotation_type.dart';
-import 'package:pdf_app/core/models/note_entry.dart';
-import 'package:pdf_app/core/theme/reading_mode.dart';
-import 'package:pdf_app/core/theme/scroll_direction.dart';
-import 'package:pdf_app/features/library/state/library_providers.dart';
-import 'package:pdf_app/features/recents/state/recents_notifier.dart';
-import 'package:pdf_app/features/reader/presentation/annotation_panel.dart';
-import 'package:pdf_app/features/reader/presentation/annotation_toolbar.dart';
-import 'package:pdf_app/features/reader/presentation/gesture_handler.dart';
-import 'package:pdf_app/features/reader/presentation/highlight_painter.dart';
-import 'package:pdf_app/features/reader/presentation/more_panel.dart';
-import 'package:pdf_app/features/reader/presentation/reader_annotation_controller.dart';
-import 'package:pdf_app/features/reader/presentation/reader_bar_controller.dart';
-import 'package:pdf_app/features/reader/presentation/reader_document_controller.dart';
-import 'package:pdf_app/features/reader/presentation/search_panel.dart';
-import 'package:pdf_app/features/reader/presentation/toc_panel.dart';
-import 'package:pdf_app/features/reader/state/providers.dart';
+import 'package:sefer/core/constants.dart';
+import 'package:sefer/core/services/app_settings_service.dart';
+import 'package:sefer/core/utils/share_utils.dart';
+import 'package:sefer/core/models/annotation.dart' as app;
+import 'package:sefer/core/models/annotation_color.dart';
+import 'package:sefer/core/models/annotation_type.dart';
+import 'package:sefer/core/models/note_entry.dart';
+import 'package:sefer/core/theme/reading_mode.dart';
+import 'package:sefer/core/theme/scroll_direction.dart';
+import 'package:sefer/features/library/state/library_providers.dart';
+import 'package:sefer/features/recents/state/recents_notifier.dart';
+import 'package:sefer/features/reader/presentation/annotation_panel.dart';
+import 'package:sefer/features/reader/presentation/annotation_toolbar.dart';
+import 'package:sefer/features/reader/presentation/gesture_handler.dart';
+import 'package:sefer/features/reader/presentation/highlight_painter.dart';
+import 'package:sefer/features/reader/presentation/more_panel.dart';
+import 'package:sefer/features/reader/presentation/reader_annotation_controller.dart';
+import 'package:sefer/features/reader/presentation/reader_bar_controller.dart';
+import 'package:sefer/features/reader/presentation/reader_document_controller.dart';
+import 'package:sefer/features/reader/presentation/search_panel.dart';
+import 'package:sefer/features/reader/presentation/toc_panel.dart';
+import 'package:sefer/features/reader/state/providers.dart';
 
 /// The immersive PDF reader page.
 ///
@@ -437,7 +437,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         _onViewerReady(doc, ctrl).catchError((Object e, StackTrace s) {
           developer.log(
             'onViewerReady failed',
-            name: 'pdf_app.reader',
+            name: 'sefer.reader',
             level: 1000,
             error: e,
             stackTrace: s,
@@ -695,13 +695,13 @@ class _NoteMarkerSheetState extends ConsumerState<_NoteMarkerSheet> {
           .loadNoteEntries(widget.annotation.id);
       developer.log(
         'note sheet _load: annotationId=${widget.annotation.id} entries=${entries.length}',
-        name: 'pdf_app.reader',
+        name: 'sefer.reader',
       );
       if (mounted) setState(() => _entries = entries);
     } catch (e, s) {
       developer.log(
         'Failed to load note entries',
-        name: 'pdf_app.reader',
+        name: 'sefer.reader',
         level: 1000,
         error: e,
         stackTrace: s,

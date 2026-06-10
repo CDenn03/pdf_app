@@ -7,8 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf_pdf;
 
-import 'package:pdf_app/core/theme/scroll_direction.dart';
-import 'package:pdf_app/features/reader/state/providers.dart';
+import 'package:sefer/core/theme/scroll_direction.dart';
+import 'package:sefer/features/reader/state/providers.dart';
 
 /// Owns the document load lifecycle: resume-page navigation, page tracking,
 /// and Syncfusion document construction (#24).

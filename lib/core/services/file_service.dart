@@ -44,7 +44,7 @@ class FileService implements FileChecker {
     } catch (e, s) {
       developer.log(
         'checkAsset failed for "$path"',
-        name: 'pdf_app.file_service',
+        name: 'sefer.file_service',
         level: 1000,
         error: e,
         stackTrace: s,
@@ -63,7 +63,7 @@ class FileService implements FileChecker {
     } catch (e, s) {
       developer.log(
         'checkFile failed for "$path"',
-        name: 'pdf_app.file_service',
+        name: 'sefer.file_service',
         level: 1000,
         error: e,
         stackTrace: s,

@@ -1,7 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 
-import 'package:pdf_app/core/database/database_helper.dart';
-import 'package:pdf_app/core/models/note_entry.dart';
+import 'package:sefer/core/database/database_helper.dart';
+import 'package:sefer/core/models/note_entry.dart';
 
 /// Data access object for [NoteEntry] CRUD operations.
 class NoteEntryDao {

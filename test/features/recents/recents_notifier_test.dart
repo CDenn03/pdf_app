@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:pdf_app/core/services/recents_service.dart';
-import 'package:pdf_app/features/recents/state/recents_notifier.dart';
+import 'package:sefer/core/services/recents_service.dart';
+import 'package:sefer/features/recents/state/recents_notifier.dart';
 
 class _FakeStore implements RecentsStore {
   final List<RecentEntry> _entries = [];

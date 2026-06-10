@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' show PdfDocument, PdfTextExtractor;
 
-import 'package:pdf_app/core/models/annotation_color.dart';
-import 'package:pdf_app/core/models/relative_rect_model.dart';
-import 'package:pdf_app/core/utils/coordinate_mapper.dart';
-import 'package:pdf_app/features/reader/presentation/annotation_toolbar.dart';
-import 'package:pdf_app/features/reader/state/providers.dart';
+import 'package:sefer/core/models/annotation_color.dart';
+import 'package:sefer/core/models/relative_rect_model.dart';
+import 'package:sefer/core/utils/coordinate_mapper.dart';
+import 'package:sefer/features/reader/presentation/annotation_toolbar.dart';
+import 'package:sefer/features/reader/state/providers.dart';
 
 /// Captures annotation gestures on top of a single PDF page overlay.
 ///
@@ -144,7 +144,7 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
     } catch (e, s) {
       developer.log(
         'Text extraction failed on page ${widget.currentPage}',
-        name: 'pdf_app.gesture',
+        name: 'sefer.gesture',
         level: 500,
         error: e,
         stackTrace: s,

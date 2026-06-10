@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:pdf_app/core/services/recents_service.dart';
+import 'package:sefer/core/services/recents_service.dart';
 
-export 'package:pdf_app/core/services/recents_service.dart' show RecentEntry;
+export 'package:sefer/core/services/recents_service.dart' show RecentEntry;
 
 /// Provider typed to the abstract interface so tests can swap in a fake (#18).
 final recentsStoreProvider = Provider<RecentsStore>((ref) => RecentsService());

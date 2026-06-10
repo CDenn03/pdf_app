@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:pdf_app/core/utils/debounce.dart';
+import 'package:sefer/core/utils/debounce.dart';
 
 void main() {
   group('Debounce', () {

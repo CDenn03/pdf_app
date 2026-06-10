@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:pdf_app/core/models/file_status.dart';
-import 'package:pdf_app/core/services/file_service.dart';
+import 'package:sefer/core/models/file_status.dart';
+import 'package:sefer/core/services/file_service.dart';
 
 void main() {
   late FileService fileService;

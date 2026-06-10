@@ -4,15 +4,15 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:pdf_app/core/constants.dart';
-import 'package:pdf_app/core/database/annotation_dao.dart';
-import 'package:pdf_app/core/database/note_entry_dao.dart';
-import 'package:pdf_app/core/models/annotation.dart';
-import 'package:pdf_app/core/models/annotation_color.dart';
-import 'package:pdf_app/core/models/annotation_type.dart';
-import 'package:pdf_app/core/models/note_entry.dart';
-import 'package:pdf_app/core/models/relative_rect_model.dart';
-import 'package:pdf_app/core/providers.dart';
+import 'package:sefer/core/constants.dart';
+import 'package:sefer/core/database/annotation_dao.dart';
+import 'package:sefer/core/database/note_entry_dao.dart';
+import 'package:sefer/core/models/annotation.dart';
+import 'package:sefer/core/models/annotation_color.dart';
+import 'package:sefer/core/models/annotation_type.dart';
+import 'package:sefer/core/models/note_entry.dart';
+import 'package:sefer/core/models/relative_rect_model.dart';
+import 'package:sefer/core/providers.dart';
 
 /// Manages annotation state for the currently viewed PDF.
 ///
@@ -115,7 +115,7 @@ class AnnotationNotifier
     await _saveAsync(annotation);
     developer.log(
       'addNote: saved annotation id=${annotation.id} pdfId=${annotation.pdfId} page=${annotation.page}',
-      name: 'pdf_app.annotation',
+      name: 'sefer.annotation',
     );
     await _saveNoteEntry(
       NoteEntry(
@@ -134,7 +134,7 @@ class AnnotationNotifier
     } catch (e, s) {
       developer.log(
         'Failed to save note entry for $annotationId',
-        name: 'pdf_app.annotation',
+        name: 'sefer.annotation',
         level: 1000,
         error: e,
         stackTrace: s,
@@ -330,7 +330,7 @@ class AnnotationNotifier
     } catch (e, s) {
       developer.log(
         'Failed to save annotation ${annotation.id}',
-        name: 'pdf_app.annotation',
+        name: 'sefer.annotation',
         level: 1000,
         error: e,
         stackTrace: s,

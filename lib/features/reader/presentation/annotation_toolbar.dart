@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:pdf_app/core/models/annotation_color.dart';
-import 'package:pdf_app/core/theme/reading_mode.dart';
-import 'package:pdf_app/features/reader/state/providers.dart';
+import 'package:sefer/core/models/annotation_color.dart';
+import 'package:sefer/core/theme/reading_mode.dart';
+import 'package:sefer/features/reader/state/providers.dart';
 
 /// The active annotation tool within annotation mode.
 enum AnnotationTool { highlight, note, bookmark }

@@ -23,7 +23,7 @@ class ReadingProgressService implements ReadingProgressStore {
     } catch (e, s) {
       developer.log(
         'getLastPage failed for $pdfId',
-        name: 'pdf_app.progress',
+        name: 'sefer.progress',
         level: 900,
         error: e,
         stackTrace: s,
@@ -40,7 +40,7 @@ class ReadingProgressService implements ReadingProgressStore {
     } catch (e, s) {
       developer.log(
         'saveLastPage failed for $pdfId',
-        name: 'pdf_app.progress',
+        name: 'sefer.progress',
         level: 900,
         error: e,
         stackTrace: s,

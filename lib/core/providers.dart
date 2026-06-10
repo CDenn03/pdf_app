@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:pdf_app/core/database/annotation_dao.dart';
-import 'package:pdf_app/core/database/database_helper.dart';
-import 'package:pdf_app/core/database/note_entry_dao.dart';
-import 'package:pdf_app/core/models/annotation_color.dart';
-import 'package:pdf_app/core/services/app_settings_service.dart';
-import 'package:pdf_app/core/services/file_service.dart';
-import 'package:pdf_app/core/services/reading_progress_service.dart';
-import 'package:pdf_app/core/theme/reading_mode.dart';
-import 'package:pdf_app/core/theme/scroll_direction.dart';
+import 'package:sefer/core/database/annotation_dao.dart';
+import 'package:sefer/core/database/database_helper.dart';
+import 'package:sefer/core/database/note_entry_dao.dart';
+import 'package:sefer/core/models/annotation_color.dart';
+import 'package:sefer/core/services/app_settings_service.dart';
+import 'package:sefer/core/services/file_service.dart';
+import 'package:sefer/core/services/reading_progress_service.dart';
+import 'package:sefer/core/theme/reading_mode.dart';
+import 'package:sefer/core/theme/scroll_direction.dart';
 
 /// Core infrastructure providers shared across features.
 

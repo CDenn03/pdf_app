@@ -5,10 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'package:pdf_app/core/providers.dart';
-import 'package:pdf_app/core/router/app_router.dart';
-import 'package:pdf_app/core/theme/app_theme.dart';
-import 'package:pdf_app/features/home/presentation/splash_screen.dart';
+import 'package:sefer/core/providers.dart';
+import 'package:sefer/core/router/app_router.dart';
+import 'package:sefer/core/theme/app_theme.dart';
+import 'package:sefer/features/home/presentation/splash_screen.dart';
 
 void main() {
   // Always use bundled fonts — never fetch from the network.
@@ -18,29 +18,27 @@ void main() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
-  runApp(const ProviderScope(child: PdfNavigatorApp()));
+  runApp(const ProviderScope(child: SeferApp()));
 }
 
-class PdfNavigatorApp extends ConsumerStatefulWidget {
-  const PdfNavigatorApp({super.key});
+class SeferApp extends ConsumerStatefulWidget {
+  const SeferApp({super.key});
 
   @override
-  ConsumerState<PdfNavigatorApp> createState() => _PdfNavigatorAppState();
+  ConsumerState<SeferApp> createState() => _SeferAppState();
 }
 
-class _PdfNavigatorAppState extends ConsumerState<PdfNavigatorApp> {
+class _SeferAppState extends ConsumerState<SeferApp> {
   bool _splashDone = false;
 
   @override
   Widget build(BuildContext context) {
     // select() narrows the watch to themeMode only, so unrelated settings
     // changes (readingMode, scrollDirection) do not rebuild MaterialApp (#22).
-    final themeMode = ref.watch(
-      appSettingsProvider.select((s) => s.themeMode),
-    );
+    final themeMode = ref.watch(appSettingsProvider.select((s) => s.themeMode));
 
     return MaterialApp.router(
-      title: 'PDF Navigator',
+      title: 'Sefer',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
@@ -48,9 +46,7 @@ class _PdfNavigatorAppState extends ConsumerState<PdfNavigatorApp> {
       routerConfig: appRouter,
       builder: (context, child) {
         if (!_splashDone) {
-          return SplashScreen(
-            onDone: () => setState(() => _splashDone = true),
-          );
+          return SplashScreen(onDone: () => setState(() => _splashDone = true));
         }
         return child ?? const SizedBox.shrink();
       },

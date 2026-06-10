@@ -1,6 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
-import 'package:pdf_app/core/models/file_status.dart';
+import 'package:sefer/core/models/file_status.dart';
 
 part 'library_entry.freezed.dart';
 

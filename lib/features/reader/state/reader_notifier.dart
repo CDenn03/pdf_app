@@ -2,9 +2,9 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:pdf_app/core/providers.dart';
-import 'package:pdf_app/core/services/reading_progress_service.dart';
-import 'package:pdf_app/features/reader/state/reader_state.dart';
+import 'package:sefer/core/providers.dart';
+import 'package:sefer/core/services/reading_progress_service.dart';
+import 'package:sefer/features/reader/state/reader_state.dart';
 
 /// Manages the PDF reader state: current page, document info, and resume.
 ///
@@ -33,7 +33,7 @@ class ReaderNotifier extends Notifier<ReaderState> {
     } catch (e, s) {
       developer.log(
         'Failed to load resume page for $pdfId',
-        name: 'pdf_app.reader',
+        name: 'sefer.reader',
         level: 900,
         error: e,
         stackTrace: s,

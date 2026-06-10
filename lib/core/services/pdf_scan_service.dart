@@ -31,7 +31,7 @@ class PdfScanService implements PdfScanner {
       } catch (e, s) {
         developer.log(
           'Error scanning $root',
-          name: 'pdf_app.scan',
+          name: 'sefer.scan',
           level: 900,
           error: e,
           stackTrace: s,
@@ -99,7 +99,7 @@ class PdfScanService implements PdfScanner {
     } catch (e, s) {
       developer.log(
         'Could not get external storage',
-        name: 'pdf_app.scan',
+        name: 'sefer.scan',
         level: 900,
         error: e,
         stackTrace: s,

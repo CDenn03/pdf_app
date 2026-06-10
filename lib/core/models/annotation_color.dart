@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:pdf_app/core/theme/app_colors.dart';
+import 'package:sefer/core/theme/app_colors.dart';
 
 /// The four annotation highlight colors.
 enum AnnotationColor { yellow, green, blue, pink }

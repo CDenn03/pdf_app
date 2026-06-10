@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:pdf_app/core/theme/app_colors.dart';
-import 'package:pdf_app/features/device/presentation/device_page.dart';
-import 'package:pdf_app/features/library/presentation/library_page.dart';
-import 'package:pdf_app/features/settings/presentation/settings_page.dart';
+import 'package:sefer/core/theme/app_colors.dart';
+import 'package:sefer/features/device/presentation/device_page.dart';
+import 'package:sefer/features/library/presentation/library_page.dart';
+import 'package:sefer/features/settings/presentation/settings_page.dart';
 
 /// Height of the floating pill nav bar including its bottom margin.
 const double kNavBarHeight = 72.0;

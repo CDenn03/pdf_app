@@ -2,8 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:pdf_app/core/models/relative_rect_model.dart';
-import 'package:pdf_app/core/utils/coordinate_mapper.dart';
+import 'package:sefer/core/models/relative_rect_model.dart';
+import 'package:sefer/core/utils/coordinate_mapper.dart';
 
 void main() {
   group('toAbsolute', () {

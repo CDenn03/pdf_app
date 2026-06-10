@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'package:pdf_app/core/models/annotation.dart';
-import 'package:pdf_app/core/models/annotation_color.dart';
-import 'package:pdf_app/core/models/annotation_type.dart';
-import 'package:pdf_app/core/utils/coordinate_mapper.dart';
+import 'package:sefer/core/models/annotation.dart';
+import 'package:sefer/core/models/annotation_color.dart';
+import 'package:sefer/core/models/annotation_type.dart';
+import 'package:sefer/core/utils/coordinate_mapper.dart';
 
 /// Renders annotation overlays on top of a PDF page.
 ///

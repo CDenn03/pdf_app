@@ -1,5 +1,5 @@
-name: pdf_app
-description: "A new Flutter project."
+name: sefer
+description: "A clean, offline-first PDF reader for Android."
 publish_to: 'none'
 
 version: 1.0.1+2

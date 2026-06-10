@@ -4,7 +4,7 @@ import 'dart:developer' as developer;
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:pdf_app/features/library/state/library_entry.dart';
+import 'package:sefer/features/library/state/library_entry.dart';
 
 /// Persists the library entry list across app restarts.
 ///
@@ -74,7 +74,7 @@ class LibraryPersistenceService implements LibraryPersistence {
     } catch (e, s) {
       developer.log(
         'loadEntries failed',
-        name: 'pdf_app.library_persistence',
+        name: 'sefer.library_persistence',
         level: 900,
         error: e,
         stackTrace: s,
@@ -108,7 +108,7 @@ class LibraryPersistenceService implements LibraryPersistence {
     } catch (e, s) {
       developer.log(
         'saveEntries failed',
-        name: 'pdf_app.library_persistence',
+        name: 'sefer.library_persistence',
         level: 900,
         error: e,
         stackTrace: s,

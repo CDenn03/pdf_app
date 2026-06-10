@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:pdf_app/core/services/pdf_scan_service.dart';
+import 'package:sefer/core/services/pdf_scan_service.dart';
 
 void main() {
   const scanner = PdfScanService();

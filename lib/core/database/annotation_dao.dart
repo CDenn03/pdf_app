@@ -3,11 +3,11 @@ import 'dart:developer' as developer;
 
 import 'package:sqflite/sqflite.dart';
 
-import 'package:pdf_app/core/database/database_helper.dart';
-import 'package:pdf_app/core/models/annotation.dart';
-import 'package:pdf_app/core/models/annotation_color.dart';
-import 'package:pdf_app/core/models/annotation_type.dart';
-import 'package:pdf_app/core/models/relative_rect_model.dart';
+import 'package:sefer/core/database/database_helper.dart';
+import 'package:sefer/core/models/annotation.dart';
+import 'package:sefer/core/models/annotation_color.dart';
+import 'package:sefer/core/models/annotation_type.dart';
+import 'package:sefer/core/models/relative_rect_model.dart';
 
 /// Data access object for annotation CRUD operations.
 ///
@@ -54,7 +54,7 @@ class AnnotationDao {
       } catch (e, s) {
         developer.log(
           'Skipping malformed annotation row: $map',
-          name: 'pdf_app.dao',
+          name: 'sefer.dao',
           level: 900,
           error: e,
           stackTrace: s,
