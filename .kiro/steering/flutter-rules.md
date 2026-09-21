@@ -51,12 +51,32 @@ You are an expert in Flutter and Dart development. Your goal is to build beautif
 - Write code with testing in mind.
 - Use `dart:developer` log instead of `print`.
 
+### Comments
+
+- Do not add comments by default. Strive for zero comments; make the code
+  self-explanatory through naming and structure instead.
+- Add a comment only when it is absolutely necessary — that is, when it
+  explains *why* a non-obvious decision was made and the reason cannot be
+  expressed in code (e.g. a workaround, an ordering constraint, a spec quirk).
+- Never write comments that restate what the code already says, header comments
+  on obvious functions, trailing comments, or commented-out code.
+- Do not add doc comments (`///`) to public APIs by default; add one only when
+  the name and signature genuinely leave intent unclear.
+- When editing existing code, remove comments that fail the "absolutely
+  necessary" test. Never delete a comment that explains a non-obvious decision.
+
+### File Length
+
+- Keep files short. Treat ~300 lines as a soft ceiling and ~500 as a hard one.
+- When a file grows past the ceiling, split it: extract private widgets,
+  dialogs, sheets, and helpers into sibling files by responsibility.
+- One primary responsibility per file; a file's name should describe it.
+
 ## Dart Best Practices
 
 - Follow the official Effective Dart guidelines: https://dart.dev/effective-dart
-- Add documentation comments to all public APIs.
-- Write clear comments for complex or non-obvious code. Avoid over-commenting.
-- Don't add trailing comments.
+- Follow the Comments policy above: no comments by default; add one only when
+  it is absolutely necessary to explain *why*.
 - Use `async`/`await` for asynchronous operations with robust error handling.
 - Use `Future`s for single async operations; `Stream`s for sequences of async events.
 - Write soundly null-safe code. Avoid `!` unless the value is guaranteed non-null.
@@ -192,12 +212,12 @@ linter:
 
 ## Documentation
 
-- Use `///` for doc comments on all public APIs.
-- Start with a single-sentence summary ending with a period.
-- Add a blank line after the summary sentence.
-- Explain why code is written a certain way, not what it does.
-- Include code samples where appropriate.
-- Place doc comments before any metadata annotations.
+- Comments and doc comments are the exception, not the rule — see the Comments
+  policy under Code Quality. Do not document by default.
+- When a doc comment is genuinely warranted, use `///`, start with a
+  single-sentence summary ending with a period, explain *why* rather than
+  *what*, and place it before any metadata annotations.
+- Prefer expressing intent in code (names, types, structure) over prose.
 
 ## SOLID Principles
 
