@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'package:sefer/core/models/file_status.dart';
 import 'package:sefer/core/theme/app_colors.dart';
-import 'package:sefer/core/utils/share_utils.dart';
 import 'package:sefer/features/library/state/library_entry.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
 import 'package:sefer/features/recents/state/recents_notifier.dart';
+import 'package:sefer/shared/widgets/file_actions_sheet.dart';
+import 'package:sefer/shared/widgets/file_list_tile.dart';
 
 /// Shows the files in a collection, or all favorites when [isFavorites] is true.
 class CollectionScreen extends ConsumerStatefulWidget {
@@ -71,13 +71,7 @@ class _CollectionScreenState extends ConsumerState<CollectionScreen> {
         slivers: [
           SliverAppBar(
             pinned: true,
-            title: Text(
-              title,
-              style: GoogleFonts.fraunces(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            title: Text(title, style: Theme.of(context).textTheme.headlineLarge),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () => context.pop(),
@@ -155,56 +149,25 @@ class _FileTile extends ConsumerWidget {
   const _FileTile({required this.entry, required this.inCollection});
 
   final LibraryEntry entry;
-
-  /// Whether this tile is shown inside a named collection (not Favorites).
   final bool inCollection;
 
-  void _showMenu(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (_) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (entry.status == FileStatus.ok) ...[
-              ListTile(
-                leading: const Icon(Icons.open_in_new_outlined),
-                title: const Text('Open'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _open(context, ref);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.share_outlined),
-                title: const Text('Share'),
-                onTap: () {
-                  Navigator.pop(context);
-                  sharePdf(context, entry.path);
-                },
-              ),
-            ],
-            ListTile(
-              leading: const Icon(Icons.drive_file_rename_outline),
-              title: const Text('Rename'),
-              onTap: () async {
-                Navigator.pop(context);
-                await _rename(context, ref);
-              },
-            ),
-            if (inCollection)
-              ListTile(
-                leading: const Icon(Icons.remove_circle_outline),
-                title: const Text('Remove from collection'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await ref
-                      .read(libraryEntriesProvider.notifier)
-                      .moveToCollection(entry.id, null);
-                },
-              ),
-          ],
-        ),
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return FileListTile(
+      title: entry.name.replaceAll('.pdf', ''),
+      gradientSeed: entry.path,
+      unavailable: entry.status != FileStatus.ok,
+      iconSize: 48,
+      trailing: _FavoriteButton(entry: entry),
+      onTap: entry.status == FileStatus.ok ? () => _open(context, ref) : null,
+      onLongPress: () => showFileActionsSheet(
+        context,
+        ref,
+        path: entry.path,
+        name: entry.name,
+        libraryEntryId: entry.id,
+        status: entry.status,
+        removeFromCollectionId: inCollection ? entry.collectionId : null,
       ),
     );
   }
@@ -213,93 +176,6 @@ class _FileTile extends ConsumerWidget {
     ref.read(libraryEntriesProvider.notifier).recordOpened(entry.path);
     ref.read(recentsProvider.notifier).recordOpened(entry.path);
     context.push('/reader', extra: entry.path);
-  }
-
-  Future<void> _rename(BuildContext context, WidgetRef ref) async {
-    final newName = await showRenameDialog(context, currentName: entry.name);
-    if (newName == null || newName.trim().isEmpty) return;
-    await ref.read(libraryEntriesProvider.notifier).renameFile(
-          entry.id,
-          newName,
-        );
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final secondary =
-        isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
-    final primary =
-        isDark ? AppColors.darkPrimaryText : AppColors.lightPrimaryText;
-    final colorIndex = entry.path.hashCode.abs();
-    final gradient = AppColors.coverGradientAt(colorIndex);
-    final unavailable = entry.status != FileStatus.ok;
-    final theme = Theme.of(context);
-
-    return InkWell(
-      onTap: unavailable ? null : () => _open(context, ref),
-      onLongPress: () => _showMenu(context, ref),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                gradient: unavailable
-                    ? null
-                    : LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: gradient,
-                      ),
-                color: unavailable
-                    ? (isDark
-                        ? AppColors.darkSurface
-                        : const Color(0xFFEEEEEE))
-                    : null,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.picture_as_pdf_outlined,
-                size: 22,
-                color: unavailable
-                    ? secondary
-                    : Colors.white.withValues(alpha: 0.9),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.name.replaceAll('.pdf', ''),
-                    style: GoogleFonts.dmSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: unavailable ? secondary : primary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (unavailable)
-                    Text(
-                      'File unavailable',
-                      style: GoogleFonts.dmSans(
-                        fontSize: 12,
-                        color: theme.colorScheme.error,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            _FavoriteButton(entry: entry),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -316,9 +192,7 @@ class _FavoriteButton extends ConsumerWidget {
         size: 20,
         color: entry.isFavorite
             ? AppColors.brand
-            : (Theme.of(context).brightness == Brightness.dark
-                ? AppColors.darkSecondaryText
-                : AppColors.lightSecondaryText),
+            : Theme.of(context).colorScheme.onSurfaceVariant,
       ),
       onPressed: () =>
           ref.read(libraryEntriesProvider.notifier).toggleFavorite(entry.id),
