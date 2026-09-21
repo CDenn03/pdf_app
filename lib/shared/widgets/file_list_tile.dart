@@ -14,6 +14,7 @@ class FileListTile extends StatelessWidget {
     this.subtitle,
     this.gradientSeed,
     this.unavailable = false,
+    this.leading,
     this.leadingOverride,
     this.trailing,
     this.iconSize = 44,
@@ -30,7 +31,10 @@ class FileListTile extends StatelessWidget {
   final Object? gradientSeed;
   final bool unavailable;
 
-  /// Replaces the gradient icon (e.g. a selection checkbox).
+  /// Widget shown before the gradient icon (e.g. a selection checkbox).
+  final Widget? leading;
+
+  /// Replaces the gradient icon entirely.
   final Widget? leadingOverride;
   final Widget? trailing;
   final double iconSize;
@@ -47,6 +51,7 @@ class FileListTile extends StatelessWidget {
 
     final row = Row(
       children: [
+        ?leading,
         ?leadingOverride,
         if (leadingOverride == null)
           _GradientIcon(
