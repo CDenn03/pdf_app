@@ -49,21 +49,29 @@ abstract final class AppTheme {
       surfaceContainerHighest: background,
     );
 
-    // DM Sans for all UI text.
+    // Type scale: DM Sans body/UI in four steps (11 / 13 / 15 / 16),
+    // Fraunces for display/headings. Regular (400) and bold (700) only,
+    // with medium (500) reserved for interactive labels and titles.
     final textTheme = GoogleFonts.dmSansTextTheme(
       TextTheme(
-        bodyLarge: TextStyle(fontSize: 15, color: onSurface, height: 1.5),
-        bodyMedium: TextStyle(fontSize: 14, color: onSurface, height: 1.5),
-        bodySmall: TextStyle(fontSize: 12, color: secondary, height: 1.4),
+        bodyLarge: TextStyle(fontSize: 16, color: onSurface, height: 1.5),
+        bodyMedium: TextStyle(fontSize: 15, color: onSurface, height: 1.5),
+        bodySmall: TextStyle(fontSize: 13, color: secondary, height: 1.4),
         labelLarge: TextStyle(
-          fontSize: 14,
+          fontSize: 15,
           fontWeight: FontWeight.w500,
           color: onSurface,
         ),
         labelMedium: TextStyle(
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: FontWeight.w500,
           color: secondary,
+        ),
+        labelSmall: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: secondary,
+          letterSpacing: 0.8,
         ),
         titleMedium: TextStyle(
           fontSize: 16,
@@ -71,7 +79,7 @@ abstract final class AppTheme {
           color: onSurface,
         ),
         titleSmall: TextStyle(
-          fontSize: 14,
+          fontSize: 15,
           fontWeight: FontWeight.w500,
           color: onSurface,
         ),

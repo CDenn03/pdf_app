@@ -62,6 +62,12 @@ abstract final class AppColors {
     return solid.withValues(alpha: 0.33);
   }
 
+  /// Favourites cover gradient — the one deliberately warm accent.
+  static const List<Color> favoritesGradient = [
+    Color(0xFF8B0000),
+    Color(0xFFCC2936),
+  ];
+
   // ── Collection cover gradients ────────────────────────────────────────────
   /// Gradient presets cycled for auto-coloured collection/file thumbnails.
   static const List<List<Color>> coverGradients = [
