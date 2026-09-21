@@ -46,6 +46,7 @@ abstract final class AppTheme {
       onSecondary: AppColors.onBrand,
       surface: surface,
       onSurface: onSurface,
+      onSurfaceVariant: secondary,
       surfaceContainerHighest: background,
     );
 
