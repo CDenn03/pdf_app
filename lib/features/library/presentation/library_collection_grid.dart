@@ -43,43 +43,41 @@ class CollectionGrid extends StatelessWidget {
         collection: col,
         count: collectionCounts[colIndex] ?? 0,
         colorIndex: colIndex + 1,
-        onAdd:
-            onAddToCollection != null ? () => onAddToCollection!(col.id) : null,
+        onAdd: onAddToCollection != null
+            ? () => onAddToCollection!(col.id)
+            : null,
       );
     }
 
     return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (_, row) {
-          final left = cardAt(row * 2);
-          final rightIndex = row * 2 + 1;
-          final right = rightIndex < cardCount ? cardAt(rightIndex) : null;
-          final swapped = row % 2 == 1;
+      delegate: SliverChildBuilderDelegate((_, row) {
+        final left = cardAt(row * 2);
+        final rightIndex = row * 2 + 1;
+        final right = rightIndex < cardCount ? cardAt(rightIndex) : null;
+        final swapped = row % 2 == 1;
 
-          return Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: right == null
-                ? left
-                : IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: swapped
-                          ? [
-                              Expanded(flex: 2, child: right),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(flex: 3, child: left),
-                            ]
-                          : [
-                              Expanded(flex: 3, child: left),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(flex: 2, child: right),
-                            ],
-                    ),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: right == null
+              ? left
+              : IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: swapped
+                        ? [
+                            Expanded(flex: 2, child: right),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(flex: 3, child: left),
+                          ]
+                        : [
+                            Expanded(flex: 3, child: left),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(flex: 2, child: right),
+                          ],
                   ),
-          );
-        },
-        childCount: rowCount,
-      ),
+                ),
+        );
+      }, childCount: rowCount),
     );
   }
 }
@@ -165,7 +163,9 @@ class FavoritesCard extends StatelessWidget {
             end: Alignment.bottomRight,
             colors: AppColors.favoritesGradient,
           ),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadius.lg),
+          ),
         ),
         alignment: Alignment.center,
         child: const Icon(Icons.favorite, size: 32, color: Colors.white),
@@ -204,8 +204,9 @@ class CollectionCard extends ConsumerWidget {
             end: Alignment.bottomRight,
             colors: gradient,
           ),
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppRadius.lg),
+          ),
         ),
         child: Stack(
           children: [

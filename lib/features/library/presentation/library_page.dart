@@ -15,7 +15,11 @@ import 'package:sefer/features/library/state/library_providers.dart';
 import 'package:sefer/features/recents/state/recents_notifier.dart';
 
 class LibraryPage extends ConsumerStatefulWidget {
-  const LibraryPage({super.key, this.bottomPadding = 0, this.onAddToCollection});
+  const LibraryPage({
+    super.key,
+    this.bottomPadding = 0,
+    this.onAddToCollection,
+  });
 
   final double bottomPadding;
   final void Function(String collectionId)? onAddToCollection;

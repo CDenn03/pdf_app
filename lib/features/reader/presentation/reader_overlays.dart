@@ -25,7 +25,11 @@ class DocumentLoadingOverlay extends StatelessWidget {
 
 /// Tap target aligned with the note tab drawn by the highlight painter.
 class NoteTapTarget extends StatelessWidget {
-  const NoteTapTarget({super.key, required this.annotation, required this.pageSize});
+  const NoteTapTarget({
+    super.key,
+    required this.annotation,
+    required this.pageSize,
+  });
 
   final app.Annotation annotation;
   final Size pageSize;
@@ -62,7 +66,11 @@ class NoteTapTarget extends StatelessWidget {
 }
 
 class BookmarkTapTarget extends StatelessWidget {
-  const BookmarkTapTarget({super.key, required this.annotation, required this.index});
+  const BookmarkTapTarget({
+    super.key,
+    required this.annotation,
+    required this.index,
+  });
 
   final app.Annotation annotation;
   final int index;
@@ -93,7 +101,6 @@ class BookmarkTapTarget extends StatelessWidget {
     );
   }
 }
-
 
 /// Per-page annotation layer: highlights, the active-tool gesture handler,
 /// and tap targets for notes and bookmarks.
@@ -132,8 +139,9 @@ class ReaderPageOverlay extends ConsumerWidget {
         .where((a) => a.type == AnnotationType.note && a.rects.isNotEmpty)
         .toList();
 
-    final bookmarks =
-        annotations.where((a) => a.type == AnnotationType.bookmark).toList();
+    final bookmarks = annotations
+        .where((a) => a.type == AnnotationType.bookmark)
+        .toList();
 
     return SizedBox(
       width: pageSize.width,

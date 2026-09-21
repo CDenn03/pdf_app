@@ -25,10 +25,7 @@ class LibraryEntryTile extends ConsumerWidget {
               .firstOrNull
         : null;
 
-    final tags = [
-      ?collectionName,
-      if (entry.isFavorite) 'Favorite',
-    ];
+    final tags = [?collectionName, if (entry.isFavorite) 'Favorite'];
 
     return FileListTile(
       title: entry.name,
@@ -49,8 +46,9 @@ class LibraryEntryTile extends ConsumerWidget {
         status: entry.status,
         showInFavorites: entry.isFavorite,
         showInCollectionId: entry.collectionId,
-        showInCollectionLabel:
-            collectionName != null ? 'Show in "$collectionName"' : null,
+        showInCollectionLabel: collectionName != null
+            ? 'Show in "$collectionName"'
+            : null,
       ),
     );
   }

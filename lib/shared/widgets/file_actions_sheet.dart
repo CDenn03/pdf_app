@@ -65,7 +65,10 @@ Future<void> showFileActionsSheet(
               title: const Text('Rename'),
               onTap: () async {
                 Navigator.pop(sheetContext);
-                final newName = await showRenameDialog(context, currentName: name);
+                final newName = await showRenameDialog(
+                  context,
+                  currentName: name,
+                );
                 if (newName == null || newName.trim().isEmpty) return;
                 await ref
                     .read(libraryEntriesProvider.notifier)

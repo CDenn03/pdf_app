@@ -150,7 +150,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
   }
 
-
   void _updateBookmarkState() {
     final annotations = ref
         .read(annotationNotifierProvider.notifier)
@@ -189,8 +188,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Future<void> _addBookmarkWithLabel() async {
     final label = await showDialog<String>(
       context: context,
-      builder: (ctx) =>
-          BookmarkLabelDialog(defaultLabel: 'Page $_currentPage'),
+      builder: (ctx) => BookmarkLabelDialog(defaultLabel: 'Page $_currentPage'),
     );
     if (label == null) return;
     final color = ref.read(activeAnnotationColorProvider);
@@ -204,7 +202,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         );
     setState(() => _currentPageBookmarked = true);
   }
-
 
   void _navigateBack() {
     final router = GoRouter.of(context);
@@ -226,7 +223,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (page != null) await _pdfController.goToPage(pageNumber: page);
     if (mounted) _scheduleAutoHide();
   }
-
 
   void _openSearch() {
     _hideBars();
@@ -288,7 +284,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     });
   }
 
-
   @override
   Widget build(BuildContext context) {
     ref.watch(annotationNotifierProvider);
@@ -330,8 +325,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       children: [
         ReadingModeFilter(mode: readingMode, child: _buildViewer(settings)),
 
-        if (!_documentReady)
-          const DocumentLoadingOverlay(),
+        if (!_documentReady) const DocumentLoadingOverlay(),
 
         Positioned(
           bottom: indicatorBottom,

@@ -146,7 +146,10 @@ class DevicePageState extends ConsumerState<DevicePage> {
     if (choice != '__new__') return choice;
 
     if (!mounted) return null;
-    final name = await showCollectionNameDialog(context, title: 'New collection');
+    final name = await showCollectionNameDialog(
+      context,
+      title: 'New collection',
+    );
     if (name == null || name.trim().isEmpty || !mounted) return null;
 
     await ref.read(collectionsProvider.notifier).addCollection(name.trim());
@@ -236,8 +239,9 @@ class DevicePageState extends ConsumerState<DevicePage> {
     if (isLoading) return const DeviceScanningState();
 
     if (entries.isEmpty && _query.isEmpty) {
-      final permDenied =
-          ref.watch(deviceFilesProvider.notifier).permissionDenied;
+      final permDenied = ref
+          .watch(deviceFilesProvider.notifier)
+          .permissionDenied;
       return DeviceEmptyState(
         permissionDenied: permDenied,
         onScan: () => ref.read(deviceFilesProvider.notifier).scan(),

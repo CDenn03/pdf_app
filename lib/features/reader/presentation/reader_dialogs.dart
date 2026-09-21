@@ -31,7 +31,10 @@ class JumpToPageDialog extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-        FilledButton(onPressed: () => _submit(context), child: const Text('Go')),
+        FilledButton(
+          onPressed: () => _submit(context),
+          child: const Text('Go'),
+        ),
       ],
     );
   }

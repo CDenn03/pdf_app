@@ -14,7 +14,10 @@ class DeviceScanningState extends StatelessWidget {
         children: [
           const CircularProgressIndicator.adaptive(),
           const SizedBox(height: AppSpacing.lg),
-          Text('Scanning device…', style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            'Scanning device…',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
         ],
       ),
     );

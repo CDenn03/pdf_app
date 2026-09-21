@@ -95,26 +95,23 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   return false;
                 },
                 child: IndexedStack(
-                index: _selectedIndex,
-                children: [
-                  LibraryPage(
-                    bottomPadding: kNavBarHeight + bottomPadding,
-                    onAddToCollection: navigateToDeviceForCollection,
-                  ),
-                  DevicePage(
-                    key: _deviceKey,
-                    bottomPadding: kNavBarHeight + bottomPadding,
-                    targetCollectionId: _deviceTargetCollectionId,
-                    onDone: () => _onTabChanged(0),
-                  ),
-                  SettingsPage(
-                    bottomPadding: kNavBarHeight + bottomPadding,
-                  ),
-                ],
-              ),
+                  index: _selectedIndex,
+                  children: [
+                    LibraryPage(
+                      bottomPadding: kNavBarHeight + bottomPadding,
+                      onAddToCollection: navigateToDeviceForCollection,
+                    ),
+                    DevicePage(
+                      key: _deviceKey,
+                      bottomPadding: kNavBarHeight + bottomPadding,
+                      targetCollectionId: _deviceTargetCollectionId,
+                      onDone: () => _onTabChanged(0),
+                    ),
+                    SettingsPage(bottomPadding: kNavBarHeight + bottomPadding),
+                  ],
+                ),
               ),
             ),
-            // Floating pill nav bar above system nav.
             Positioned(
               left: 16,
               right: 16,
@@ -132,10 +129,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Floating pill nav bar
-// ---------------------------------------------------------------------------
 
 class _FloatingNavBar extends StatelessWidget {
   const _FloatingNavBar({
@@ -161,8 +154,9 @@ class _FloatingNavBar extends StatelessWidget {
         return Container(
           height: 60,
           decoration: BoxDecoration(
-            color: (isDark ? Colors.black : Colors.white)
-                .withValues(alpha: alpha),
+            color: (isDark ? Colors.black : Colors.white).withValues(
+              alpha: alpha,
+            ),
             borderRadius: BorderRadius.circular(30),
             border: Border.all(
               color: scheme.onSurface.withValues(alpha: isDark ? 0.08 : 0.07),
@@ -244,11 +238,7 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Greeting header — exported for child pages
-// ---------------------------------------------------------------------------
-
-/// Large Fraunces title with optional subtitle and trailing action widget.
 class GreetingHeader extends StatelessWidget {
   const GreetingHeader({
     super.key,
@@ -295,9 +285,7 @@ class GreetingHeader extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Section label — exported for child pages
-// ---------------------------------------------------------------------------
 
 class SectionLabel extends StatelessWidget {
   const SectionLabel(this.text, {super.key});
@@ -320,10 +308,6 @@ class SectionLabel extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Shared search bar widget
-// ---------------------------------------------------------------------------
 
 class PageSearchBar extends StatelessWidget {
   const PageSearchBar({
@@ -379,7 +363,11 @@ class PageSearchBar extends StatelessWidget {
             ),
             if (controller.text.isNotEmpty)
               IconButton(
-                icon: Icon(Icons.close, size: 16, color: scheme.onSurfaceVariant),
+                icon: Icon(
+                  Icons.close,
+                  size: 16,
+                  color: scheme.onSurfaceVariant,
+                ),
                 onPressed: () {
                   controller.clear();
                   onChanged('');

@@ -96,7 +96,10 @@ class RecentCard extends ConsumerWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Text(_timeAgo(entry.openedAt), style: theme.textTheme.labelSmall),
+                    Text(
+                      _timeAgo(entry.openedAt),
+                      style: theme.textTheme.labelSmall,
+                    ),
                   ],
                 ),
               ),

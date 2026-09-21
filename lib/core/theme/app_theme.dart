@@ -35,20 +35,21 @@ abstract final class AppTheme {
     required Color secondary,
     required Color divider,
   }) {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.brand,
-      brightness: brightness,
-      surface: surface,
-    ).copyWith(
-      primary: AppColors.brand,
-      onPrimary: AppColors.onBrand,
-      secondary: AppColors.ground,
-      onSecondary: AppColors.onBrand,
-      surface: surface,
-      onSurface: onSurface,
-      onSurfaceVariant: secondary,
-      surfaceContainerHighest: background,
-    );
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: AppColors.brand,
+          brightness: brightness,
+          surface: surface,
+        ).copyWith(
+          primary: AppColors.brand,
+          onPrimary: AppColors.onBrand,
+          secondary: AppColors.ground,
+          onSecondary: AppColors.onBrand,
+          surface: surface,
+          onSurface: onSurface,
+          onSurfaceVariant: secondary,
+          surfaceContainerHighest: background,
+        );
 
     // Type scale: DM Sans body/UI in four steps (11 / 13 / 15 / 16),
     // Fraunces for display/headings. Regular (400) and bold (700) only,

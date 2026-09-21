@@ -39,9 +39,9 @@ class DeviceSelectionHeader extends StatelessWidget {
           const SizedBox(width: AppSpacing.xs),
           Text(
             count > 0 ? '$count selected' : 'Select files',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: AppColors.brand,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(color: AppColors.brand),
           ),
         ],
       ),
@@ -98,10 +98,13 @@ class DeviceActionBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
         ),
-        child: Text(label, style: theme.textTheme.labelLarge?.copyWith(
-          color: AppColors.onBrand,
-          fontWeight: FontWeight.w600,
-        )),
+        child: Text(
+          label,
+          style: theme.textTheme.labelLarge?.copyWith(
+            color: AppColors.onBrand,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }

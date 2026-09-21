@@ -18,9 +18,9 @@ class CollectionScreen extends ConsumerStatefulWidget {
     this.isFavorites = false,
     this.onAddBook,
   }) : assert(
-          collectionId != null || isFavorites,
-          'Provide collectionId or set isFavorites',
-        );
+         collectionId != null || isFavorites,
+         'Provide collectionId or set isFavorites',
+       );
 
   final String? collectionId;
   final bool isFavorites;
@@ -50,16 +50,16 @@ class _CollectionScreenState extends ConsumerState<CollectionScreen> {
     final title = widget.isFavorites
         ? 'Favorites'
         : collections
-                .where((c) => c.id == widget.collectionId)
-                .map((c) => c.name)
-                .firstOrNull ??
-            'Collection';
+                  .where((c) => c.id == widget.collectionId)
+                  .map((c) => c.name)
+                  .firstOrNull ??
+              'Collection';
 
     final baseEntries = widget.isFavorites
         ? allEntries.where((e) => e.isFavorite).toList()
         : allEntries
-            .where((e) => e.collectionId == widget.collectionId)
-            .toList();
+              .where((e) => e.collectionId == widget.collectionId)
+              .toList();
 
     final q = _query.toLowerCase().trim();
     final entries = q.isEmpty
@@ -71,7 +71,10 @@ class _CollectionScreenState extends ConsumerState<CollectionScreen> {
         slivers: [
           SliverAppBar(
             pinned: true,
-            title: Text(title, style: Theme.of(context).textTheme.headlineLarge),
+            title: Text(
+              title,
+              style: Theme.of(context).textTheme.headlineLarge,
+            ),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () => context.pop(),
@@ -123,8 +126,8 @@ class _CollectionScreenState extends ConsumerState<CollectionScreen> {
                   q.isNotEmpty
                       ? 'No results for "$q"'
                       : widget.isFavorites
-                          ? 'No favorites yet.'
-                          : 'No files here yet.',
+                      ? 'No favorites yet.'
+                      : 'No files here yet.',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
               ),

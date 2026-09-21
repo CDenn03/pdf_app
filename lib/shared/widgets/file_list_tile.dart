@@ -54,11 +54,7 @@ class FileListTile extends StatelessWidget {
         ?leading,
         ?leadingOverride,
         if (leadingOverride == null)
-          _GradientIcon(
-            size: iconSize,
-            unavailable: unavailable,
-            seed: seed,
-          ),
+          _GradientIcon(size: iconSize, unavailable: unavailable, seed: seed),
         const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Column(

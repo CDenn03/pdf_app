@@ -28,7 +28,10 @@ class LibraryEmptyState extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(height: AppSpacing.lg),
-            Text('Your library is empty', style: theme.textTheme.headlineMedium),
+            Text(
+              'Your library is empty',
+              style: theme.textTheme.headlineMedium,
+            ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'Go to Device tab to add PDFs.',
