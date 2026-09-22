@@ -321,9 +321,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ? barHeight + barMargin + MediaQuery.of(context).padding.bottom + 12
         : 16.0;
 
+    final topPadding = MediaQuery.of(context).padding.top;
+
     return Stack(
       children: [
-        ReadingModeFilter(mode: readingMode, child: _buildViewer(settings)),
+        Padding(
+          padding: EdgeInsets.only(top: topPadding),
+          child: ReadingModeFilter(mode: readingMode, child: _buildViewer(settings)),
+        ),
 
         if (!_documentReady) const DocumentLoadingOverlay(),
 
