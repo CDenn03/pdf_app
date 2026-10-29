@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -11,6 +12,12 @@ import 'package:sefer/core/theme/app_theme.dart';
 import 'package:sefer/features/home/presentation/splash_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Draw behind the status and navigation bars on every OS version, not just
+  // the Android 15+ versions that force it, so inset handling is uniform.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
   // Always use bundled fonts — never fetch from the network.
   GoogleFonts.config.allowRuntimeFetching = false;
 
