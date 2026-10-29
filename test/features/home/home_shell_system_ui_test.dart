@@ -54,6 +54,16 @@ class _EmptyRecents implements RecentsStore {
 
   @override
   Future<void> recordOpened(String path, String name) async {}
+
+  @override
+  Future<void> moveEntry({
+    required String oldPath,
+    required String newPath,
+    required String newName,
+  }) async {}
+
+  @override
+  Future<void> remove(String path) async {}
 }
 
 class _FakeSettings implements AppSettingsStore {

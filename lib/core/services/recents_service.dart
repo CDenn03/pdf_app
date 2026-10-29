@@ -35,6 +35,12 @@ class RecentEntry {
 abstract class RecentsStore {
   Future<List<RecentEntry>> load();
   Future<void> recordOpened(String path, String name);
+  Future<void> moveEntry({
+    required String oldPath,
+    required String newPath,
+    required String newName,
+  });
+  Future<void> remove(String path);
 }
 
 /// [SharedPreferences]-backed implementation of [RecentsStore].
@@ -73,11 +79,7 @@ class RecentsService implements RecentsStore {
         RecentEntry(path: path, name: name, openedAt: DateTime.now()),
         ...entries.where((e) => e.path != path),
       ].take(_maxEntries).toList();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _key,
-        jsonEncode(updated.map((e) => e.toJson()).toList()),
-      );
+      await _save(updated);
     } catch (e, s) {
       developer.log(
         'recents save failed',
@@ -87,5 +89,59 @@ class RecentsService implements RecentsStore {
         stackTrace: s,
       );
     }
+  }
+
+  @override
+  Future<void> moveEntry({
+    required String oldPath,
+    required String newPath,
+    required String newName,
+  }) async {
+    try {
+      final entries = await load();
+      final index = entries.indexWhere((e) => e.path == oldPath);
+      if (index == -1) return;
+      final old = entries[index];
+      entries[index] = RecentEntry(
+        path: newPath,
+        name: newName,
+        openedAt: old.openedAt,
+      );
+      await _save(entries);
+    } catch (e, s) {
+      developer.log(
+        'recents moveEntry failed from $oldPath to $newPath',
+        name: 'sefer.recents',
+        level: 900,
+        error: e,
+        stackTrace: s,
+      );
+    }
+  }
+
+  @override
+  Future<void> remove(String path) async {
+    try {
+      final entries = await load();
+      final updated = entries.where((e) => e.path != path).toList();
+      if (updated.length == entries.length) return;
+      await _save(updated);
+    } catch (e, s) {
+      developer.log(
+        'recents remove failed for $path',
+        name: 'sefer.recents',
+        level: 900,
+        error: e,
+        stackTrace: s,
+      );
+    }
+  }
+
+  Future<void> _save(List<RecentEntry> entries) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _key,
+      jsonEncode(entries.map((e) => e.toJson()).toList()),
+    );
   }
 }

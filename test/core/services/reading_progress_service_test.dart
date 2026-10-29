@@ -36,4 +36,40 @@ void main() {
     final service = ReadingProgressService();
     expect(await service.getLastPage('/new.pdf'), 1);
   });
+
+  test('movePage carries the page across and drops the old key', () async {
+    const oldPath = '/books/old.pdf';
+    const newPath = '/books/new.pdf';
+    final service = ReadingProgressService();
+    await service.saveLastPage(oldPath, 7);
+
+    await service.movePage(oldPath, newPath);
+
+    expect(await service.getLastPage(newPath), 7);
+    expect(
+      await service.getLastPage(oldPath),
+      1,
+      reason: 'old key must be removed',
+    );
+  });
+
+  test('movePage is a no-op when nothing is stored', () async {
+    const oldPath = '/books/missing.pdf';
+    const newPath = '/books/new.pdf';
+    final service = ReadingProgressService();
+
+    await service.movePage(oldPath, newPath);
+
+    expect(await service.getLastPage(newPath), 1);
+  });
+
+  test('clear removes the stored page', () async {
+    const path = '/books/gone.pdf';
+    final service = ReadingProgressService();
+    await service.saveLastPage(path, 12);
+
+    await service.clear(path);
+
+    expect(await service.getLastPage(path), 1);
+  });
 }

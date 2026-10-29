@@ -18,6 +18,17 @@ class _FakeProgressStore implements ReadingProgressStore {
     saveCount++;
     _pages[pdfId] = page;
   }
+
+  @override
+  Future<void> movePage(String oldPdfId, String newPdfId) async {
+    final page = _pages.remove(oldPdfId);
+    if (page != null) _pages[newPdfId] = page;
+  }
+
+  @override
+  Future<void> clear(String pdfId) async {
+    _pages.remove(pdfId);
+  }
 }
 
 void main() {

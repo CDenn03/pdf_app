@@ -6,10 +6,12 @@ import 'package:sefer/core/database/database_helper.dart';
 import 'package:sefer/core/database/note_entry_dao.dart';
 import 'package:sefer/core/models/annotation_color.dart';
 import 'package:sefer/core/services/app_settings_service.dart';
+import 'package:sefer/core/services/document_keys_service.dart';
 import 'package:sefer/core/services/file_service.dart';
 import 'package:sefer/core/services/reading_progress_service.dart';
 import 'package:sefer/core/theme/reading_mode.dart';
 import 'package:sefer/core/theme/scroll_direction.dart';
+import 'package:sefer/features/recents/state/recents_notifier.dart';
 
 /// Core infrastructure providers shared across features.
 
@@ -38,6 +40,14 @@ final fileServiceProvider = Provider<FileChecker>((ref) {
 
 final readingProgressProvider = Provider<ReadingProgressStore>((ref) {
   return ReadingProgressService();
+});
+
+final documentKeyStoreProvider = Provider<DocumentKeyStore>((ref) {
+  return DocumentKeyService(
+    annotationDao: ref.watch(annotationDaoProvider),
+    progress: ref.watch(readingProgressProvider),
+    recents: ref.watch(recentsStoreProvider),
+  );
 });
 
 final appSettingsServiceProvider = Provider<AppSettingsStore>((ref) {
