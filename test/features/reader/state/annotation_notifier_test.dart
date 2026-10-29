@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -127,12 +129,12 @@ void main() {
     });
 
     test('inserts initial note entry via NoteEntryDao', () async {
-      notifier().addNote(
+      unawaited(notifier().addNote(
         edgePosition: _edgePos,
         initialText: 'hello',
         page: 1,
         pdfId: 'pdf1',
-      );
+      ));
       // Give the async insert a chance to run.
       await Future<void>.delayed(Duration.zero);
       verify(() => noteEntryDao.insert(any())).called(1);
@@ -183,12 +185,12 @@ void main() {
 
     test('undoes in LIFO order', () async {
       notifier().addHighlight(rects: _rects, page: 1, pdfId: 'pdf1');
-      notifier().addNote(
+      unawaited(notifier().addNote(
         edgePosition: _edgePos,
         initialText: 'note',
         page: 1,
         pdfId: 'pdf1',
-      );
+      ));
 
       final msg1 = await notifier().undo();
       expect(msg1, 'Note removed');

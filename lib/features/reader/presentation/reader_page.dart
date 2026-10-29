@@ -1,5 +1,5 @@
-import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -11,7 +11,6 @@ import 'package:sefer/core/utils/share_utils.dart';
 import 'package:sefer/core/models/annotation.dart' as app;
 import 'package:sefer/core/models/annotation_type.dart';
 import 'package:sefer/core/theme/reading_mode.dart';
-import 'package:sefer/core/theme/scroll_direction.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
 import 'package:sefer/features/recents/state/recents_notifier.dart';
 import 'package:sefer/features/reader/presentation/annotation_panel.dart';
@@ -22,8 +21,12 @@ import 'package:sefer/features/reader/presentation/reader_bar_controller.dart';
 import 'package:sefer/features/reader/presentation/reader_chrome.dart';
 import 'package:sefer/features/reader/presentation/reader_dialogs.dart';
 import 'package:sefer/features/reader/presentation/reader_document_controller.dart';
+import 'package:sefer/features/reader/presentation/reader_find_bar.dart';
+import 'package:sefer/features/reader/presentation/reader_overlay_style.dart';
 import 'package:sefer/features/reader/presentation/reader_overlays.dart';
-import 'package:sefer/features/reader/presentation/search_panel.dart';
+import 'package:sefer/features/reader/presentation/reader_search_controller.dart';
+import 'package:sefer/features/reader/presentation/reader_viewport.dart';
+import 'package:sefer/features/reader/presentation/reader_viewport_inset.dart';
 import 'package:sefer/features/reader/presentation/toc_panel.dart';
 import 'package:sefer/features/reader/state/providers.dart';
 
@@ -44,6 +47,7 @@ class ReaderPage extends ConsumerStatefulWidget {
 
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   late final PdfViewerController _pdfController;
+  PdfTextSearcherController? _search;
   late final ReaderDocumentController _docCtrl;
   late final ReaderBarController _barCtrl;
   late final ReaderAnnotationController _annotCtrl;
@@ -53,6 +57,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   /// False until [onViewerReady] fires — shows a loading overlay.
   bool _documentReady = false;
+
+  /// The resume page, resolved from persistence before the viewer is built so
+  /// [PdfViewerParams.calculateInitialPageNumber] can return it synchronously.
+  /// Null while the lookup is in flight — the viewer is not built until then.
+  int? _resumePage;
+
+  bool _findBarVisible = false;
 
   bool get _isAsset =>
       !widget.pdfPath.startsWith('/') && !widget.pdfPath.contains('://');
@@ -86,6 +97,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       },
     );
 
+    _resolveResumePage();
+
     _barCtrl.scheduleAutoHide();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(libraryEntriesProvider.notifier).recordOpened(widget.pdfPath);
@@ -93,8 +106,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     });
   }
 
+  Future<void> _resolveResumePage() async {
+    final page = await ref.read(readingProgressProvider).getLastPage(
+          widget.pdfPath,
+        );
+    if (mounted) setState(() => _resumePage = page);
+  }
+
   @override
   void dispose() {
+    _search?.dispose();
     _docCtrl.dispose(); // disposes _sfDocument (#10)
     _barCtrl.dispose();
     super.dispose();
@@ -106,6 +127,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     PdfDocument doc,
     PdfViewerController controller,
   ) async {
+    _search ??= PdfTextSearcherController(
+      PdfTextSearcher(controller),
+      controller,
+    );
     await _docCtrl.onViewerReady(doc, context);
     if (mounted) setState(() => _documentReady = true);
   }
@@ -225,11 +250,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _openSearch() {
+    if (_search == null) return;
     _hideBars();
-    showSearchPanel(
-      context: context,
-      pdfController: _pdfController,
-    ).then((_) => _showBars());
+    setState(() => _findBarVisible = true);
+  }
+
+  void _closeFindBar() {
+    _search?.resetTextSearch();
+    setState(() => _findBarVisible = false);
+    _showBars();
   }
 
   void _openToc() {
@@ -290,24 +319,28 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final settings = ref.watch(appSettingsProvider);
     final readingMode = settings.readingMode;
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        _navigateBack();
-      },
-      child: Scaffold(
-        backgroundColor: readingMode.background,
-        appBar: _barsVisible && !_annotating
-            ? ReaderAppBar(
-                title: _documentTitle,
-                isBookmarked: _currentPageBookmarked,
-                onBack: _navigateBack,
-                onBookmark: _toggleBookmark,
-                readingMode: readingMode,
-              )
-            : null,
-        body: _buildBody(settings, readingMode),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: readerOverlayStyle(readingMode),
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          _navigateBack();
+        },
+        child: Scaffold(
+          backgroundColor: readingMode.background,
+          extendBodyBehindAppBar: true,
+          appBar: _barsVisible && !_annotating
+              ? ReaderAppBar(
+                  title: _documentTitle,
+                  isBookmarked: _currentPageBookmarked,
+                  onBack: _navigateBack,
+                  onBookmark: _toggleBookmark,
+                  readingMode: readingMode,
+                )
+              : null,
+          body: _buildBody(settings, readingMode),
+        ),
       ),
     );
   }
@@ -322,15 +355,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         : 16.0;
 
     final topPadding = MediaQuery.of(context).padding.top;
+    final appBarShown = barVisible;
+    final findBarTop =
+        topPadding + (appBarShown ? kToolbarHeight : 0.0);
 
     return Stack(
       children: [
-        Padding(
-          padding: EdgeInsets.only(top: topPadding),
-          child: ReadingModeFilter(mode: readingMode, child: _buildViewer(settings)),
+        ReaderViewportInset(
+          topInset: topPadding,
+          child: ReadingModeFilter(
+            mode: readingMode,
+            child: _resumePage == null
+                ? const SizedBox.expand()
+                : _buildViewer(settings),
+          ),
         ),
 
-        if (!_documentReady) const DocumentLoadingOverlay(),
+        if (!_documentReady || _resumePage == null)
+          const DocumentLoadingOverlay(),
+
+        if (_findBarVisible && _search != null)
+          Positioned(
+            top: findBarTop,
+            left: 0,
+            right: 0,
+            child: ReaderFindBar(
+              search: _search!,
+              readingMode: readingMode,
+              onClose: _closeFindBar,
+            ),
+          ),
 
         Positioned(
           bottom: indicatorBottom,
@@ -401,91 +455,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   // Settings are passed in from build() (which uses ref.watch) so changes to
   // scroll direction or reading mode trigger a viewer rebuild (#8).
   Widget _buildViewer(AppSettings settings) {
-    final bool isPaginated =
-        settings.scrollDirection == ScrollDirection.sideBySide ||
-        settings.scrollDirection == ScrollDirection.bookFlip;
-    final readingMode = settings.readingMode;
-
-    final params = PdfViewerParams(
-      layoutPages: isPaginated ? _horizontalPageLayout : null,
-      margin: 8,
-      // Wrap the async callback so errors are logged rather than swallowed
-      // (async void fire-and-forget would discard exceptions silently) (#3).
-      onViewerReady: (doc, ctrl) {
-        _onViewerReady(doc, ctrl).catchError((Object e, StackTrace s) {
-          developer.log(
-            'onViewerReady failed',
-            name: 'sefer.reader',
-            level: 1000,
-            error: e,
-            stackTrace: s,
-          );
-        });
-      },
-      onPageChanged: _onPageChanged,
-      linkHandlerParams: PdfLinkHandlerParams(
-        onLinkTap: (link) {
-          if (link.dest != null) {
-            _pdfController.goToPage(pageNumber: link.dest!.pageNumber);
-          } else if (link.url != null) {
-            // External URLs are ignored — only internal navigation is handled.
-          }
-        },
-      ),
-      onGeneralTap: (context, controller, details) {
-        _toggleBars();
-        return false;
-      },
-      textSelectionParams: PdfTextSelectionParams(enabled: !_annotating),
-      // Pre-compensate highlight colors for the reading mode's color filter
-      // so search matches remain visible in dark and sepia modes.
-      matchTextColor: readingMode.searchMatchColor,
-      activeMatchTextColor: readingMode.searchActiveMatchColor,
-      pageOverlaysBuilder: (context, pageRectInViewer, page) {
-        return [
-          ReaderPageOverlay(
-            pageRectInViewer: pageRectInViewer,
-            page: page,
-            annotating: _annotating,
-            pdfId: widget.pdfPath,
-            activeTool: _activeTool,
-            sfDocument: _sfDocument,
-            onAddBookmark: _addBookmarkWithLabel,
-          ),
-        ];
-      },
-    );
-
-    if (_isAsset) {
-      return PdfViewer.asset(
-        widget.pdfPath,
-        controller: _pdfController,
-        params: params,
-      );
-    }
-    return PdfViewer.file(
-      widget.pdfPath,
+    return ReaderViewport(
+      pdfPath: widget.pdfPath,
+      isAsset: _isAsset,
       controller: _pdfController,
-      params: params,
+      settings: settings,
+      annotating: _annotating,
+      activeTool: _activeTool,
+      sfDocument: _sfDocument,
+      resumePage: _resumePage ?? 1,
+      search: _search,
+      onViewerReady: _onViewerReady,
+      onPageChanged: _onPageChanged,
+      onGeneralTap: _toggleBars,
+      onAddBookmark: _addBookmarkWithLabel,
     );
-  }
-
-  static PdfPageLayout _horizontalPageLayout(
-    List<PdfPage> pages,
-    PdfViewerParams params,
-  ) {
-    final margin = params.margin;
-    final maxH =
-        pages.fold(0.0, (h, p) => h > p.height ? h : p.height) + margin * 2;
-    final rects = <Rect>[];
-    var x = margin;
-    for (final page in pages) {
-      rects.add(
-        Rect.fromLTWH(x, (maxH - page.height) / 2, page.width, page.height),
-      );
-      x += page.width + margin;
-    }
-    return PdfPageLayout(pageLayouts: rects, documentSize: Size(x, maxH));
   }
 
   String get _documentTitle {
