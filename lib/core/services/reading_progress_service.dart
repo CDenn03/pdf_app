@@ -9,6 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 abstract class ReadingProgressStore {
   Future<int> getLastPage(String pdfId);
   Future<void> saveLastPage(String pdfId, int page);
+  Future<void> movePage(String oldPdfId, String newPdfId);
+  Future<void> clear(String pdfId);
 }
 
 /// [SharedPreferences]-backed implementation.
@@ -40,6 +42,41 @@ class ReadingProgressService implements ReadingProgressStore {
     } catch (e, s) {
       developer.log(
         'saveLastPage failed for $pdfId',
+        name: 'sefer.progress',
+        level: 900,
+        error: e,
+        stackTrace: s,
+      );
+    }
+  }
+
+  @override
+  Future<void> movePage(String oldPdfId, String newPdfId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final page = prefs.getInt(_key(oldPdfId));
+      if (page == null) return;
+      await prefs.setInt(_key(newPdfId), page);
+      await prefs.remove(_key(oldPdfId));
+    } catch (e, s) {
+      developer.log(
+        'movePage failed from $oldPdfId to $newPdfId',
+        name: 'sefer.progress',
+        level: 900,
+        error: e,
+        stackTrace: s,
+      );
+    }
+  }
+
+  @override
+  Future<void> clear(String pdfId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_key(pdfId));
+    } catch (e, s) {
+      developer.log(
+        'clear failed for $pdfId',
         name: 'sefer.progress',
         level: 900,
         error: e,

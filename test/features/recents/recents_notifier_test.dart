@@ -15,6 +15,24 @@ class _FakeStore implements RecentsStore {
     _entries.removeWhere((e) => e.path == path);
     _entries.insert(0, RecentEntry(path: path, name: name, openedAt: DateTime.now()));
   }
+
+  @override
+  Future<void> moveEntry({
+    required String oldPath,
+    required String newPath,
+    required String newName,
+  }) async {
+    final index = _entries.indexWhere((e) => e.path == oldPath);
+    if (index == -1) return;
+    final old = _entries[index];
+    _entries[index] =
+        RecentEntry(path: newPath, name: newName, openedAt: old.openedAt);
+  }
+
+  @override
+  Future<void> remove(String path) async {
+    _entries.removeWhere((e) => e.path == path);
+  }
 }
 
 void main() {

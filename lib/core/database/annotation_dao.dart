@@ -85,6 +85,41 @@ class AnnotationDao {
     );
   }
 
+  /// Rekeys every annotation of [oldPdfId] to [newPdfId] after a file rename.
+  Future<void> reassignPdfId(String oldPdfId, String newPdfId) async {
+    final db = await _db;
+    await db.update(
+      'annotations',
+      {'pdf_id': newPdfId, 'updated_at': _now},
+      where: 'pdf_id = ?',
+      whereArgs: [oldPdfId],
+    );
+  }
+
+  /// Hard-deletes every annotation of [pdfId] and its note entries.
+  ///
+  /// Hard, not soft: the document no longer exists, so `is_deleted = 1` would
+  /// leave rows keyed to a path that is gone. note_entries has a foreign key
+  /// without ON DELETE CASCADE and sqflite keeps PRAGMA foreign_keys off, so
+  /// its rows are removed explicitly in the same transaction to avoid orphans.
+  Future<void> purgeForPdf(String pdfId) async {
+    final db = await _db;
+    await db.transaction((txn) async {
+      await txn.delete(
+        'note_entries',
+        where: '''
+          annotation_id IN (SELECT id FROM annotations WHERE pdf_id = ?)
+        ''',
+        whereArgs: [pdfId],
+      );
+      await txn.delete(
+        'annotations',
+        where: 'pdf_id = ?',
+        whereArgs: [pdfId],
+      );
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Mapping
   // ---------------------------------------------------------------------------
