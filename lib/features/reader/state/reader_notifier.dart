@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:sefer/core/providers.dart';
 import 'package:sefer/core/services/reading_progress_service.dart';
+import 'package:sefer/core/utils/debounce.dart';
 import 'package:sefer/features/reader/state/reader_state.dart';
 
 /// Manages the PDF reader state: current page, document info, and resume.
@@ -12,10 +13,13 @@ import 'package:sefer/features/reader/state/reader_state.dart';
 /// storms — reader and annotation state must never be merged.
 class ReaderNotifier extends Notifier<ReaderState> {
   late final ReadingProgressStore _progressStore;
+  final Debounce _persistDebounce =
+      Debounce(duration: const Duration(milliseconds: 400));
 
   @override
   ReaderState build() {
     _progressStore = ref.read(readingProgressProvider);
+    ref.onDispose(_persistDebounce.dispose);
     return const ReaderState();
   }
 
@@ -51,9 +55,14 @@ class ReaderNotifier extends Notifier<ReaderState> {
 
   /// Called when the user navigates to a different page.
   ///
-  /// Persists the new page so it can be resumed next session.
+  /// Persists the new page so it can be resumed next session. Writes are
+  /// refused until a document with a real id is loaded, so pdfrx's initial
+  /// `onPageChanged(1)` cannot overwrite stored progress with junk, and are
+  /// debounced so rapid page changes collapse into a single write.
   void onPageChanged(int page) {
+    if (!state.isLoaded || state.pdfId.isEmpty) return;
     state = state.copyWith(currentPage: page);
-    _progressStore.saveLastPage(state.pdfId, page);
+    final pdfId = state.pdfId;
+    _persistDebounce.run(() => _progressStore.saveLastPage(pdfId, page));
   }
 }

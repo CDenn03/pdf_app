@@ -38,16 +38,12 @@ class ReaderDocumentController {
   Future<void> onViewerReady(PdfDocument doc, BuildContext context) async {
     final bundle = DefaultAssetBundle.of(context);
     totalPages = doc.pages.length;
+    currentPage = pdfController.pageNumber ?? currentPage;
     onStateChanged();
 
     await ref
         .read(readerNotifierProvider.notifier)
         .onDocumentLoaded(pdfId: pdfPath, totalPages: totalPages);
-
-    final resumePage = ref.read(readerNotifierProvider).resumePage;
-    if (resumePage > 1) {
-      await pdfController.goToPage(pageNumber: resumePage);
-    }
 
     final window =
         ref.read(appSettingsProvider).scrollDirection ==

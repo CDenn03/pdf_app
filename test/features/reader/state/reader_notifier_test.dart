@@ -8,12 +8,14 @@ import 'package:sefer/features/reader/state/providers.dart';
 /// In-memory fake that always returns page 1 and discards saves.
 class _FakeProgressStore implements ReadingProgressStore {
   final Map<String, int> _pages = {};
+  int saveCount = 0;
 
   @override
   Future<int> getLastPage(String pdfId) async => _pages[pdfId] ?? 1;
 
   @override
   Future<void> saveLastPage(String pdfId, int page) async {
+    saveCount++;
     _pages[pdfId] = page;
   }
 }
@@ -27,6 +29,9 @@ void main() {
     container = ProviderContainer(
       overrides: [readingProgressProvider.overrideWithValue(store)],
     );
+    // readerNotifierProvider is autoDispose; hold a subscription so it is not
+    // torn down (which would cancel the debounce timer) while a test awaits.
+    container.listen(readerNotifierProvider, (_, _) {});
   });
 
   tearDown(() => container.dispose());
@@ -78,7 +83,51 @@ void main() {
       final notifier = container.read(readerNotifierProvider.notifier);
       await notifier.onDocumentLoaded(pdfId: 'abc', totalPages: 10);
       notifier.onPageChanged(5);
+      await _flushDebounce();
       expect(store._pages['abc'], 5);
+    });
+
+    test('persists nothing while pdfId is empty', () async {
+      final notifier = container.read(readerNotifierProvider.notifier);
+      notifier.onPageChanged(5);
+      await _flushDebounce();
+      expect(store._pages, isEmpty);
+    });
+
+    test('an initial page-1 callback does not clobber saved progress',
+        () async {
+      store._pages['A'] = 7;
+      final notifier = container.read(readerNotifierProvider.notifier);
+      await notifier.onDocumentLoaded(pdfId: 'A', totalPages: 10);
+      expect(container.read(readerNotifierProvider).resumePage, 7);
+
+      notifier.onPageChanged(1);
+      await _flushDebounce();
+      expect(store._pages['A'], 1);
+
+      final reopened = ProviderContainer(
+        overrides: [readingProgressProvider.overrideWithValue(store)],
+      );
+      addTearDown(reopened.dispose);
+      await reopened
+          .read(readerNotifierProvider.notifier)
+          .onDocumentLoaded(pdfId: 'A', totalPages: 10);
+      expect(reopened.read(readerNotifierProvider).resumePage, 1);
+    });
+
+    test('rapid page changes collapse into a single write', () async {
+      final notifier = container.read(readerNotifierProvider.notifier);
+      await notifier.onDocumentLoaded(pdfId: 'abc', totalPages: 100);
+      for (var page = 2; page <= 20; page++) {
+        notifier.onPageChanged(page);
+      }
+      expect(store.saveCount, 0);
+      await _flushDebounce();
+      expect(store.saveCount, 1);
+      expect(store._pages['abc'], 20);
     });
   });
 }
+
+Future<void> _flushDebounce() =>
+    Future<void>.delayed(const Duration(milliseconds: 500));
