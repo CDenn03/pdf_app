@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:sefer/core/theme/app_colors.dart';
 import 'package:sefer/core/theme/app_spacing.dart';
+import 'package:sefer/core/theme/system_ui.dart';
 import 'package:sefer/features/device/presentation/device_page.dart';
 import 'package:sefer/features/library/presentation/library_page.dart';
 import 'package:sefer/features/settings/presentation/settings_page.dart';
@@ -76,54 +78,59 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final topPadding = MediaQuery.of(context).padding.top;
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
-    return PopScope(
-      // Back on any non-Library tab → go to Library.
-      canPop: _selectedIndex == 0,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _selectedIndex != 0) {
-          _onTabChanged(0);
-        }
-      },
-      child: Scaffold(
-        body: Stack(
-          children: [
-            Padding(
-              padding: EdgeInsets.only(top: topPadding),
-              child: NotificationListener<ScrollNotification>(
-                onNotification: (n) {
-                  _onScroll(n);
-                  return false;
-                },
-                child: IndexedStack(
-                  index: _selectedIndex,
-                  children: [
-                    LibraryPage(
-                      bottomPadding: kNavBarHeight + bottomPadding,
-                      onAddToCollection: navigateToDeviceForCollection,
-                    ),
-                    DevicePage(
-                      key: _deviceKey,
-                      bottomPadding: kNavBarHeight + bottomPadding,
-                      targetCollectionId: _deviceTargetCollectionId,
-                      onDone: () => _onTabChanged(0),
-                    ),
-                    SettingsPage(bottomPadding: kNavBarHeight + bottomPadding),
-                  ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: AppSystemUi.forBackground(Theme.of(context).brightness),
+      child: PopScope(
+        // Back on any non-Library tab → go to Library.
+        canPop: _selectedIndex == 0,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && _selectedIndex != 0) {
+            _onTabChanged(0);
+          }
+        },
+        child: Scaffold(
+          body: Stack(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(top: topPadding),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (n) {
+                    _onScroll(n);
+                    return false;
+                  },
+                  child: IndexedStack(
+                    index: _selectedIndex,
+                    children: [
+                      LibraryPage(
+                        bottomPadding: kNavBarHeight + bottomPadding,
+                        onAddToCollection: navigateToDeviceForCollection,
+                      ),
+                      DevicePage(
+                        key: _deviceKey,
+                        bottomPadding: kNavBarHeight + bottomPadding,
+                        targetCollectionId: _deviceTargetCollectionId,
+                        onDone: () => _onTabChanged(0),
+                      ),
+                      SettingsPage(
+                        bottomPadding: kNavBarHeight + bottomPadding,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: bottomPadding + 12,
-              child: _FloatingNavBar(
-                selectedIndex: _selectedIndex,
-                tabs: _tabs,
-                onTabChanged: _onTabChanged,
-                scrollProgress: _scrollProgress,
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: bottomPadding + 12,
+                child: _FloatingNavBar(
+                  selectedIndex: _selectedIndex,
+                  tabs: _tabs,
+                  onTabChanged: _onTabChanged,
+                  scrollProgress: _scrollProgress,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

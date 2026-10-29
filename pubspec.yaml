@@ -72,8 +72,9 @@ flutter_native_splash:
   image: assets/splash_logo.png
   image_dark: assets/splash_logo.png
 
-  # Fill the entire screen (no letterboxing on Android 12+).
-  fullscreen: true
+  # Keep the native splash within the safe area so the status bar stays
+  # visible — fullscreen hid the clock, battery and signal icons.
+  fullscreen: false
 
   android_12:
     # Android 12+ uses the new SplashScreen API — same brand teal.
