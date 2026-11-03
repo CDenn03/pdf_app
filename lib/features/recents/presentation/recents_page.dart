@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:sefer/core/theme/app_colors.dart';
 import 'package:sefer/core/utils/share_utils.dart';
-import 'package:sefer/features/library/state/library_providers.dart';
+import 'package:sefer/features/library/state/document_actions.dart';
 import 'package:sefer/features/recents/state/recents_notifier.dart';
 
 /// Shows all PDFs the user has opened recently, newest first.
@@ -101,20 +101,20 @@ class _RecentTile extends ConsumerWidget {
                 title: const Text('Rename'),
                 onTap: () async {
                   Navigator.pop(context);
-                  final libraryEntry = ref
-                      .read(libraryEntriesProvider)
-                      .value
-                      ?.where((e) => e.path == entry.path)
-                      .firstOrNull;
-                  if (libraryEntry == null || !context.mounted) return;
+                  final messenger = ScaffoldMessenger.of(context);
                   final newName = await showRenameDialog(
                     context,
-                    currentName: libraryEntry.name,
+                    currentName: entry.name,
                   );
-                  if (newName == null || newName.trim().isEmpty) return;
-                  await ref
-                      .read(libraryEntriesProvider.notifier)
-                      .renameFile(libraryEntry.id, newName);
+                  if (newName == null) return;
+                  final result = await ref
+                      .read(documentActionsProvider)
+                      .rename(path: entry.path, newName: newName);
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(result.ok ? 'Renamed.' : result.message!),
+                    ),
+                  );
                 },
               ),
             ],

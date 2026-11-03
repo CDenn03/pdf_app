@@ -24,6 +24,13 @@ class RecentsNotifier extends Notifier<List<RecentEntry>> {
     state = await _service.load();
   }
 
+  /// Re-reads the persisted list.
+  ///
+  /// Needed because a rename or delete rewrites the recents rows through
+  /// [RecentsStore] directly (via `DocumentKeyStore`), which leaves this
+  /// notifier's in-memory list stale until it reloads.
+  Future<void> reload() => _load();
+
   /// Records that the file at [path] was opened right now.
   Future<void> recordOpened(String path) async {
     await _service.recordOpened(path, p.basename(path));

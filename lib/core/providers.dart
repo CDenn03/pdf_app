@@ -38,6 +38,15 @@ final fileServiceProvider = Provider<FileChecker>((ref) {
   return const FileService();
 });
 
+/// The same [FileService], exposed under its mutating contract.
+///
+/// Kept separate from [fileServiceProvider] so that a surface which only
+/// inspects files cannot reach rename/delete by accident, and so tests can
+/// override the two halves independently.
+final fileMutatorProvider = Provider<FileMutator>((ref) {
+  return const FileService();
+});
+
 final readingProgressProvider = Provider<ReadingProgressStore>((ref) {
   return ReadingProgressService();
 });

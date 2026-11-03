@@ -119,11 +119,57 @@ class LibraryNotifier extends AsyncNotifier<List<LibraryEntry>> {
   }
 
   /// Renames a library entry (display name only; does not rename the file).
+  ///
+  /// Use [applyRename] after an on-disk rename instead: this leaves [path]
+  /// pointing at the old filename, so the entry's label and the file itself
+  /// disagree.
   Future<void> renameFile(String id, String newName) async {
     final updated = (state.value ?? []).map((e) {
       return e.id == id ? e.copyWith(name: newName) : e;
     }).toList();
     state = AsyncData(updated);
+    await _persist();
+  }
+
+  /// Repoints the entry at [oldPath] to [newPath] after the file itself has
+  /// been renamed on disk.
+  ///
+  /// Matches on path rather than entry id so it works for a file that has no
+  /// library entry (a no-op) as well as one that does, and so the caller does
+  /// not have to resolve an id first. Collection membership, favorite flag
+  /// and last-opened timestamp are preserved.
+  Future<void> applyRename({
+    required String oldPath,
+    required String newPath,
+    required String newName,
+  }) async {
+    final current = state.value ?? [];
+    if (!current.any((e) => e.path == oldPath)) return;
+    final updated = current.map((e) {
+      return e.path == oldPath ? e.copyWith(path: newPath, name: newName) : e;
+    }).toList();
+    state = AsyncData(updated);
+    await _persist();
+  }
+
+  /// Drops the entry for [path], if there is one. Leaves the file alone.
+  Future<void> removeByPath(String path) async {
+    final current = state.value ?? [];
+    if (!current.any((e) => e.path == path)) return;
+    final updated = current.where((e) => e.path != path).toList();
+    state = AsyncData(updated);
+    await _persist();
+  }
+
+  /// Re-adds a previously removed [entry] verbatim, for undo.
+  ///
+  /// Keeps the original id, collection and favorite flag, so undoing a
+  /// "remove from library" restores the entry rather than creating a fresh
+  /// one at the end of the list.
+  Future<void> restoreEntry(LibraryEntry entry) async {
+    final current = state.value ?? [];
+    if (current.any((e) => e.path == entry.path)) return;
+    state = AsyncData([...current, entry]);
     await _persist();
   }
 
@@ -191,6 +237,30 @@ class DeviceFilesNotifier extends AsyncNotifier<List<LibraryEntry>> {
     );
     state = AsyncData(entries);
     return entries;
+  }
+
+  /// Repoints the scanned entry at [oldPath] to [newPath] in place.
+  ///
+  /// A full [scan] would also be correct, but the walk is capped at 5000
+  /// files and is the slowest thing on this tab, so a rename patches the one
+  /// row instead. The id is the path here, so it moves with it.
+  void applyRename({required String oldPath, required String newPath}) {
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData([
+      for (final e in current)
+        if (e.path == oldPath)
+          e.copyWith(id: newPath, path: newPath, name: p.basename(newPath))
+        else
+          e,
+    ]);
+  }
+
+  /// Drops the scanned entry for [path] after the file has been deleted.
+  void removePath(String path) {
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData(current.where((e) => e.path != path).toList());
   }
 }
 
