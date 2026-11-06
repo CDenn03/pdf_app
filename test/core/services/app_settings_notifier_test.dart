@@ -6,7 +6,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:sefer/core/providers.dart';
 import 'package:sefer/core/services/app_settings_service.dart';
 import 'package:sefer/core/theme/reading_mode.dart';
-import 'package:sefer/core/theme/scroll_direction.dart';
+import 'package:sefer/core/theme/reader_layout_mode.dart';
 
 class _MockStore extends Mock implements AppSettingsStore {}
 
@@ -42,10 +42,7 @@ void main() {
         .read(appSettingsProvider.notifier)
         .setReadingMode(ReadingMode.dark);
 
-    expect(
-      container.read(appSettingsProvider).readingMode,
-      ReadingMode.dark,
-    );
+    expect(container.read(appSettingsProvider).readingMode, ReadingMode.dark);
     verify(() => store.save(any())).called(1);
   });
 
@@ -60,13 +57,13 @@ void main() {
     expect(container.read(appSettingsProvider).themeMode, ThemeMode.dark);
   });
 
-  test('setScrollDirection persists', () async {
+  test('setReaderLayoutMode persists', () async {
     final container = container0();
     addTearDown(container.dispose);
 
     await container
         .read(appSettingsProvider.notifier)
-        .setScrollDirection(ScrollDirection.continuous);
+        .setReaderLayoutMode(ReaderLayoutMode.continuous);
 
     verify(() => store.save(any())).called(1);
   });

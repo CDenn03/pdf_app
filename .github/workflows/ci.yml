@@ -1,0 +1,62 @@
+name: CI
+
+# Runs the full quality gate on every push (any branch) and every pull request.
+# Pinned to the same Flutter version as release.yml so CI matches release builds.
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Analyze & test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.1'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Generated files (*.g.dart, *.freezed.dart) are committed, so a clean
+      # checkout compiles without build_runner and CI does not need to run it.
+      # Instead, regenerate and fail if the committed outputs are stale — this
+      # is faster than an unconditional build and actually guards the checkout.
+      # The diff is scoped to generated files on purpose: an unscoped `git diff`
+      # would report any unrelated working-tree edit as a staleness failure.
+      - name: Verify committed generated files are not stale
+        run: |
+          dart run build_runner build
+          if ! git diff --quiet -- '*.g.dart' '*.freezed.dart'; then
+            echo "::error::Committed generated files are stale. Run 'dart run build_runner build' and commit the result."
+            git --no-pager diff --stat -- '*.g.dart' '*.freezed.dart'
+            exit 1
+          fi
+
+      # --fatal-infos is explicit rather than version-dependent: newer Flutter
+      # fails on infos by default and older Flutter does not, so spelling it out
+      # keeps CI and `tool/check.sh` in agreement on every SDK. The tree is
+      # currently info-clean, so this holds the line at zero diagnostics.
+      - name: Static analysis
+        run: flutter analyze --fatal-infos
+
+      - name: Run tests with coverage
+        run: flutter test --coverage
+
+      - name: Enforce file-length policy
+        run: bash tool/check_file_length.sh
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          if-no-files-found: error

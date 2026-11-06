@@ -14,16 +14,16 @@ import 'package:sefer/shared/widgets/overlay_panel.dart';
 Future<void> showAnnotationPanel({
   required BuildContext context,
   required String pdfId,
-  required void Function(int page) onNavigate,
+  required ValueChanged<int> onPageSelected,
 }) {
   return OverlayPanel.show(
     context: context,
     title: 'Annotations',
     builder: (ctx) => _AnnotationPanelContent(
       pdfId: pdfId,
-      onNavigate: (page) {
+      onPageSelected: (page) {
         Navigator.of(ctx).pop();
-        onNavigate(page);
+        onPageSelected(page);
       },
     ),
   );
@@ -32,11 +32,11 @@ Future<void> showAnnotationPanel({
 class _AnnotationPanelContent extends ConsumerStatefulWidget {
   const _AnnotationPanelContent({
     required this.pdfId,
-    required this.onNavigate,
+    required this.onPageSelected,
   });
 
   final String pdfId;
-  final void Function(int page) onNavigate;
+  final ValueChanged<int> onPageSelected;
 
   @override
   ConsumerState<_AnnotationPanelContent> createState() =>
@@ -93,9 +93,7 @@ class _AnnotationPanelContentState
         merged[a.id] = a;
       }
 
-      final result = merged.values
-          .where((a) => !a.isDeleted)
-          .toList()
+      final result = merged.values.where((a) => !a.isDeleted).toList()
         ..sort((a, b) => a.page.compareTo(b.page));
 
       if (mounted) setState(() => _annotations = result);
@@ -130,11 +128,13 @@ class _AnnotationPanelContentState
           isScrollable: true,
           tabAlignment: TabAlignment.start,
           tabs: _tabs
-              .map((t) => Tab(
-                    text: t.type == null
-                        ? '${t.label} (${annotations.length})'
-                        : '${t.label} (${annotations.where((a) => a.type == t.type).length})',
-                  ))
+              .map(
+                (t) => Tab(
+                  text: t.type == null
+                      ? '${t.label} (${annotations.length})'
+                      : '${t.label} (${annotations.where((a) => a.type == t.type).length})',
+                ),
+              )
               .toList(),
         ),
         Flexible(
@@ -146,7 +146,7 @@ class _AnnotationPanelContentState
                   : annotations.where((a) => a.type == t.type).toList();
               return _AnnotationList(
                 annotations: filtered,
-                onNavigate: widget.onNavigate,
+                onPageSelected: widget.onPageSelected,
                 onDelete: (id) async {
                   await ref
                       .read(annotationNotifierProvider.notifier)
@@ -165,12 +165,12 @@ class _AnnotationPanelContentState
 class _AnnotationList extends StatelessWidget {
   const _AnnotationList({
     required this.annotations,
-    required this.onNavigate,
+    required this.onPageSelected,
     required this.onDelete,
   });
 
   final List<Annotation> annotations;
-  final void Function(int page) onNavigate;
+  final ValueChanged<int> onPageSelected;
   final void Function(String id) onDelete;
 
   @override
@@ -179,10 +179,7 @@ class _AnnotationList extends StatelessWidget {
       return const Padding(
         padding: EdgeInsets.all(32),
         child: Center(
-          child: Text(
-            'Nothing here yet.',
-            textAlign: TextAlign.center,
-          ),
+          child: Text('Nothing here yet.', textAlign: TextAlign.center),
         ),
       );
     }
@@ -203,7 +200,7 @@ class _AnnotationList extends StatelessWidget {
         return _PageGroup(
           page: page,
           annotations: items,
-          onNavigate: onNavigate,
+          onPageSelected: onPageSelected,
           onDelete: onDelete,
         );
       },
@@ -215,13 +212,13 @@ class _PageGroup extends StatelessWidget {
   const _PageGroup({
     required this.page,
     required this.annotations,
-    required this.onNavigate,
+    required this.onPageSelected,
     required this.onDelete,
   });
 
   final int page;
   final List<Annotation> annotations;
-  final void Function(int page) onNavigate;
+  final ValueChanged<int> onPageSelected;
   final void Function(String id) onDelete;
 
   @override
@@ -237,7 +234,7 @@ class _PageGroup extends StatelessWidget {
         ...annotations.map(
           (a) => _AnnotationItem(
             annotation: a,
-            onTap: () => onNavigate(a.page),
+            onTap: () => onPageSelected(a.page),
             onDelete: () => onDelete(a.id),
           ),
         ),

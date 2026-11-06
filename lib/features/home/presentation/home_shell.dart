@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'package:sefer/core/theme/app_colors.dart';
+import 'package:sefer/core/theme/app_spacing.dart';
+import 'package:sefer/core/theme/system_ui.dart';
 import 'package:sefer/features/device/presentation/device_page.dart';
 import 'package:sefer/features/library/presentation/library_page.dart';
 import 'package:sefer/features/settings/presentation/settings_page.dart';
 
-/// Height of the floating pill nav bar including its bottom margin.
 const double kNavBarHeight = 72.0;
 
 class HomeShell extends ConsumerStatefulWidget {
@@ -19,6 +20,7 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _selectedIndex = 0;
+  bool _deviceVisited = false;
 
   /// 0.0 = at top (more transparent), 1.0 = scrolled down (fully opaque).
   final _scrollProgress = ValueNotifier<double>(0.0);
@@ -58,7 +60,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         _deviceTargetCollectionId = null;
       });
     } else {
-      setState(() => _selectedIndex = index);
+      setState(() {
+        _selectedIndex = index;
+        _deviceVisited = true;
+      });
     }
     _scrollProgress.value = _tabScrollOffsets[index] / 80.0;
   }
@@ -68,6 +73,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     _deviceKey.currentState?.clearSelection();
     setState(() {
       _selectedIndex = 1;
+      _deviceVisited = true;
       _deviceTargetCollectionId = collectionId;
     });
   }
@@ -77,66 +83,72 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final topPadding = MediaQuery.of(context).padding.top;
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
-    return PopScope(
-      // Back on any non-Library tab → go to Library.
-      canPop: _selectedIndex == 0,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _selectedIndex != 0) {
-          _onTabChanged(0);
-        }
-      },
-      child: Scaffold(
-        body: Stack(
-          children: [
-            Padding(
-              padding: EdgeInsets.only(top: topPadding),
-              child: NotificationListener<ScrollNotification>(
-                onNotification: (n) {
-                  _onScroll(n);
-                  return false;
-                },
-                child: IndexedStack(
-                index: _selectedIndex,
-                children: [
-                  LibraryPage(
-                    bottomPadding: kNavBarHeight + bottomPadding,
-                    onAddToCollection: navigateToDeviceForCollection,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: AppSystemUi.forBackground(Theme.of(context).brightness),
+      child: PopScope(
+        // Back on any non-Library tab → go to Library.
+        canPop: _selectedIndex == 0,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          if (_selectedIndex == 1 &&
+              (_deviceKey.currentState?.handleBack() ?? false)) {
+            return;
+          }
+          if (_selectedIndex != 0) {
+            _onTabChanged(0);
+          }
+        },
+        child: Scaffold(
+          body: Stack(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(top: topPadding),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (n) {
+                    _onScroll(n);
+                    return false;
+                  },
+                  child: IndexedStack(
+                    index: _selectedIndex,
+                    children: [
+                      LibraryPage(
+                        bottomPadding: kNavBarHeight + bottomPadding,
+                        onAddToCollection: navigateToDeviceForCollection,
+                      ),
+                      if (_deviceVisited)
+                        DevicePage(
+                          key: _deviceKey,
+                          bottomPadding: kNavBarHeight + bottomPadding,
+                          targetCollectionId: _deviceTargetCollectionId,
+                          onDone: () => _onTabChanged(0),
+                        )
+                      else
+                        const SizedBox.shrink(),
+                      SettingsPage(
+                        bottomPadding: kNavBarHeight + bottomPadding,
+                      ),
+                    ],
                   ),
-                  DevicePage(
-                    key: _deviceKey,
-                    bottomPadding: kNavBarHeight + bottomPadding,
-                    targetCollectionId: _deviceTargetCollectionId,
-                    onDone: () => _onTabChanged(0),
-                  ),
-                  SettingsPage(
-                    bottomPadding: kNavBarHeight + bottomPadding,
-                  ),
-                ],
+                ),
               ),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: bottomPadding + 12,
+                child: _FloatingNavBar(
+                  selectedIndex: _selectedIndex,
+                  tabs: _tabs,
+                  onTabChanged: _onTabChanged,
+                  scrollProgress: _scrollProgress,
+                ),
               ),
-            ),
-            // Floating pill nav bar above system nav.
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: bottomPadding + 12,
-              child: _FloatingNavBar(
-                selectedIndex: _selectedIndex,
-                tabs: _tabs,
-                onTabChanged: _onTabChanged,
-                scrollProgress: _scrollProgress,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Floating pill nav bar
-// ---------------------------------------------------------------------------
 
 class _FloatingNavBar extends StatelessWidget {
   const _FloatingNavBar({
@@ -153,23 +165,21 @@ class _FloatingNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return ValueListenableBuilder<double>(
       valueListenable: scrollProgress,
       builder: (context, progress, child) {
-        // At top (progress=0): alpha 0.55. Scrolled (progress=1): alpha 0.94.
         final alpha = 0.55 + 0.39 * progress;
         return Container(
           height: 60,
           decoration: BoxDecoration(
-            color: isDark
-                ? Colors.black.withValues(alpha: alpha)
-                : Colors.white.withValues(alpha: alpha),
+            color: (isDark ? Colors.black : Colors.white).withValues(
+              alpha: alpha,
+            ),
             borderRadius: BorderRadius.circular(30),
             border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.08)
-                  : Colors.black.withValues(alpha: 0.07),
+              color: scheme.onSurface.withValues(alpha: isDark ? 0.08 : 0.07),
             ),
             boxShadow: [
               BoxShadow(
@@ -211,9 +221,8 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final inactive =
-        isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
+    final theme = Theme.of(context);
+    final inactive = theme.colorScheme.onSurfaceVariant;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -227,7 +236,7 @@ class _NavItem extends StatelessWidget {
             height: 30,
             decoration: BoxDecoration(
               color: selected ? AppColors.brand : Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadius.lg),
             ),
             child: Icon(
               tab.icon,
@@ -235,12 +244,11 @@ class _NavItem extends StatelessWidget {
               color: selected ? AppColors.onBrand : inactive,
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: AppSpacing.xxs),
           Text(
             tab.label,
-            style: GoogleFonts.dmSans(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
+            style: theme.textTheme.labelSmall?.copyWith(
+              letterSpacing: 0,
               color: selected ? AppColors.brand : inactive,
             ),
           ),
@@ -250,11 +258,7 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Greeting header — exported for child pages
-// ---------------------------------------------------------------------------
-
-/// Large Fraunces title with optional subtitle and trailing action widget.
 class GreetingHeader extends StatelessWidget {
   const GreetingHeader({
     super.key,
@@ -269,14 +273,15 @@ class GreetingHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final secondary =
-        isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
-    final primary =
-        isDark ? AppColors.darkPrimaryText : AppColors.lightPrimaryText;
+    final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -285,19 +290,10 @@ class GreetingHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (subtitle != null)
-                  Text(
-                    subtitle!,
-                    style: GoogleFonts.dmSans(fontSize: 14, color: secondary),
-                  ),
+                  Text(subtitle!, style: theme.textTheme.bodyMedium),
                 Text(
                   title,
-                  style: GoogleFonts.fraunces(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w700,
-                    color: primary,
-                    letterSpacing: -0.5,
-                    height: 1.1,
-                  ),
+                  style: theme.textTheme.displayLarge?.copyWith(height: 1.1),
                 ),
               ],
             ),
@@ -309,9 +305,7 @@ class GreetingHeader extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Section label — exported for child pages
-// ---------------------------------------------------------------------------
 
 class SectionLabel extends StatelessWidget {
   const SectionLabel(this.text, {super.key});
@@ -320,27 +314,20 @@ class SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.xl,
+        AppSpacing.xl,
+        AppSpacing.sm,
+      ),
       child: Text(
         text.toUpperCase(),
-        style: GoogleFonts.dmSans(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: isDark
-              ? AppColors.darkSecondaryText
-              : AppColors.lightSecondaryText,
-          letterSpacing: 0.8,
-        ),
+        style: Theme.of(context).textTheme.labelSmall,
       ),
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Shared search bar widget
-// ---------------------------------------------------------------------------
 
 class PageSearchBar extends StatelessWidget {
   const PageSearchBar({
@@ -356,34 +343,39 @@ class PageSearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? AppColors.darkSurface : AppColors.lightSurface;
-    final border = isDark ? AppColors.darkDivider : AppColors.lightDivider;
-    final hint =
-        isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final hintStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        0,
+        AppSpacing.xl,
+        AppSpacing.md,
+      ),
       child: Container(
         height: 44,
         decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: border),
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: theme.dividerColor),
         ),
         child: Row(
           children: [
-            const SizedBox(width: 12),
-            Icon(Icons.search, size: 18, color: hint),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.md),
+            Icon(Icons.search, size: 18, color: scheme.onSurfaceVariant),
+            const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: TextField(
                 controller: controller,
                 onChanged: onChanged,
-                style: GoogleFonts.dmSans(fontSize: 15),
+                style: theme.textTheme.bodyMedium,
                 decoration: InputDecoration(
                   hintText: hintText,
-                  hintStyle: GoogleFonts.dmSans(fontSize: 15, color: hint),
+                  hintStyle: hintStyle,
                   border: InputBorder.none,
                   isDense: true,
                 ),
@@ -391,7 +383,11 @@ class PageSearchBar extends StatelessWidget {
             ),
             if (controller.text.isNotEmpty)
               IconButton(
-                icon: Icon(Icons.close, size: 16, color: hint),
+                icon: Icon(
+                  Icons.close,
+                  size: 16,
+                  color: scheme.onSurfaceVariant,
+                ),
                 onPressed: () {
                   controller.clear();
                   onChanged('');

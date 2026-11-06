@@ -39,6 +39,19 @@ void main() {
           await db.execute(
             'CREATE INDEX idx_pdf_page ON annotations(pdf_id, page)',
           );
+          await db.execute('''
+            CREATE TABLE note_entries (
+              id TEXT PRIMARY KEY,
+              annotation_id TEXT NOT NULL,
+              text TEXT NOT NULL,
+              created_at TEXT NOT NULL DEFAULT (datetime('now')),
+              FOREIGN KEY (annotation_id) REFERENCES annotations(id)
+            )
+          ''');
+          await db.execute(
+            'CREATE INDEX idx_note_entries_annotation '
+            'ON note_entries(annotation_id)',
+          );
         },
       ),
     );
@@ -157,6 +170,91 @@ void main() {
       expect(pdf2Results.length, 1);
       expect(pdf1Results.first.id, 'a1');
       expect(pdf2Results.first.id, 'a2');
+    });
+  });
+
+  Future<void> insertNote(String id, String annotationId) async {
+    await db.insert('note_entries', {
+      'id': id,
+      'annotation_id': annotationId,
+      'text': 'note $id',
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<int> noteCount(String annotationId) async {
+    final rows = await db.query(
+      'note_entries',
+      where: 'annotation_id = ?',
+      whereArgs: [annotationId],
+    );
+    return rows.length;
+  }
+
+  group('reassignPdfId', () {
+    test('moves only one document and leaves others alone', () async {
+      await dao.upsert(makeHighlight(id: 'a1', pdfId: '/old.pdf', page: 1));
+      await dao.upsert(makeHighlight(id: 'a2', pdfId: '/old.pdf', page: 2));
+      await dao.upsert(makeHighlight(id: 'b1', pdfId: '/other.pdf'));
+
+      await dao.reassignPdfId('/old.pdf', '/new.pdf');
+
+      expect(await dao.getAllForPdf('/old.pdf'), isEmpty);
+      final moved = await dao.getAllForPdf('/new.pdf');
+      expect(moved.map((a) => a.id), containsAll(['a1', 'a2']));
+      final other = await dao.getAllForPdf('/other.pdf');
+      expect(other.single.id, 'b1');
+    });
+
+    test('is a no-op when no rows match', () async {
+      await dao.upsert(makeHighlight(id: 'b1', pdfId: '/other.pdf'));
+
+      await dao.reassignPdfId('/missing.pdf', '/new.pdf');
+
+      expect(await dao.getAllForPdf('/new.pdf'), isEmpty);
+      expect((await dao.getAllForPdf('/other.pdf')).single.id, 'b1');
+    });
+  });
+
+  group('purgeForPdf', () {
+    test('hard-deletes annotations AND their note entries, '
+        'leaving a different document untouched', () async {
+      await dao.upsert(makeHighlight(id: 'a1', pdfId: '/gone.pdf', page: 1));
+      await dao.upsert(makeHighlight(id: 'a2', pdfId: '/gone.pdf', page: 2));
+      await dao.upsert(makeHighlight(id: 'b1', pdfId: '/keep.pdf'));
+      await insertNote('n1', 'a1');
+      await insertNote('n2', 'a1');
+      await insertNote('n3', 'a2');
+      await insertNote('k1', 'b1');
+
+      await dao.purgeForPdf('/gone.pdf');
+
+      final goneRows = await db.query(
+        'annotations',
+        where: 'pdf_id = ?',
+        whereArgs: ['/gone.pdf'],
+      );
+      expect(goneRows, isEmpty, reason: 'hard delete, not soft');
+      expect(await noteCount('a1'), 0, reason: 'notes must not orphan');
+      expect(await noteCount('a2'), 0);
+
+      final keepRows = await db.query(
+        'annotations',
+        where: 'pdf_id = ?',
+        whereArgs: ['/keep.pdf'],
+      );
+      expect(keepRows.length, 1);
+      expect(await noteCount('b1'), 1);
+    });
+
+    test('is a no-op when the document has nothing stored', () async {
+      await dao.upsert(makeHighlight(id: 'b1', pdfId: '/keep.pdf'));
+      await insertNote('k1', 'b1');
+
+      await dao.purgeForPdf('/missing.pdf');
+
+      expect((await dao.getAllForPdf('/keep.pdf')).single.id, 'b1');
+      expect(await noteCount('b1'), 1);
     });
   });
 }

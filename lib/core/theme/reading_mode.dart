@@ -73,4 +73,19 @@ extension ReadingModeX on ReadingMode {
     ReadingMode.dark => const Color(0x99007FFF),
     ReadingMode.sepia => const Color(0x99CC00CC),
   };
+
+  /// Text selection highlight, pre-compensated for the reading mode's color
+  /// filter the same way as the search colors.
+  ///
+  /// Target is a translucent blue (0xFF3D8BFF, alpha 0x66) in light mode.
+  /// Dark inversion: 0xFFC27400. Sepia keeps a saturated blue that stays
+  /// distinct from the warm paper after the matrix.
+  Color get selectionColor => switch (this) {
+    ReadingMode.light => const Color(0x663D8BFF),
+    ReadingMode.dark => const Color(0x66C27400),
+    ReadingMode.sepia => const Color(0x660040FF),
+  };
+
+  /// Opaque variant of [selectionColor] for the drag handles.
+  Color get selectionHandleColor => selectionColor.withAlpha(0xFF);
 }

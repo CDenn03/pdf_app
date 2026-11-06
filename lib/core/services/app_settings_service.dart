@@ -4,26 +4,26 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:sefer/core/theme/reading_mode.dart';
-import 'package:sefer/core/theme/scroll_direction.dart';
+import 'package:sefer/core/theme/reader_layout_mode.dart';
 
 class AppSettings {
   final ReadingMode readingMode;
-  final ScrollDirection scrollDirection;
+  final ReaderLayoutMode layoutMode;
   final ThemeMode themeMode;
 
   const AppSettings({
     this.readingMode = ReadingMode.light,
-    this.scrollDirection = ScrollDirection.sideBySide,
+    this.layoutMode = ReaderLayoutMode.defaultMode,
     this.themeMode = ThemeMode.system,
   });
 
   AppSettings copyWith({
     ReadingMode? readingMode,
-    ScrollDirection? scrollDirection,
+    ReaderLayoutMode? layoutMode,
     ThemeMode? themeMode,
   }) => AppSettings(
     readingMode: readingMode ?? this.readingMode,
-    scrollDirection: scrollDirection ?? this.scrollDirection,
+    layoutMode: layoutMode ?? this.layoutMode,
     themeMode: themeMode ?? this.themeMode,
   );
 
@@ -33,11 +33,11 @@ class AppSettings {
   bool operator ==(Object other) =>
       other is AppSettings &&
       other.readingMode == readingMode &&
-      other.scrollDirection == scrollDirection &&
+      other.layoutMode == layoutMode &&
       other.themeMode == themeMode;
 
   @override
-  int get hashCode => Object.hash(readingMode, scrollDirection, themeMode);
+  int get hashCode => Object.hash(readingMode, layoutMode, themeMode);
 }
 
 abstract class AppSettingsStore {
@@ -47,7 +47,9 @@ abstract class AppSettingsStore {
 
 class AppSettingsService implements AppSettingsStore {
   static const _keyReadingMode = 'app_reading_mode';
-  static const _keyScrollDirection = 'app_scroll_direction';
+  // Predates ReaderLayoutMode; renaming the key would reset saved layouts.
+  // Predates ReaderLayoutMode; renaming the key would reset saved layouts.
+  static const _keyLayoutMode = 'app_scroll_direction';
   static const _keyThemeMode = 'app_theme_mode';
 
   @override
@@ -55,17 +57,14 @@ class AppSettingsService implements AppSettingsStore {
     try {
       final prefs = await SharedPreferences.getInstance();
       final modeName = prefs.getString(_keyReadingMode);
-      final dirName = prefs.getString(_keyScrollDirection);
+      final layoutToken = prefs.getString(_keyLayoutMode);
       final themeName = prefs.getString(_keyThemeMode);
       return AppSettings(
         readingMode: ReadingMode.values.firstWhere(
           (m) => m.name == modeName,
           orElse: () => ReadingMode.light,
         ),
-        scrollDirection: ScrollDirection.values.firstWhere(
-          (d) => d.name == dirName,
-          orElse: () => ScrollDirection.sideBySide,
-        ),
+        layoutMode: decodeReaderLayoutMode(layoutToken),
         themeMode: ThemeMode.values.firstWhere(
           (t) => t.name == themeName,
           orElse: () => ThemeMode.system,
@@ -88,7 +87,10 @@ class AppSettingsService implements AppSettingsStore {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_keyReadingMode, settings.readingMode.name);
-      await prefs.setString(_keyScrollDirection, settings.scrollDirection.name);
+      await prefs.setString(
+        _keyLayoutMode,
+        encodeReaderLayoutMode(settings.layoutMode),
+      );
       await prefs.setString(_keyThemeMode, settings.themeMode.name);
     } catch (e, s) {
       developer.log(

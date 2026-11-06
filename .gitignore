@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+
+# Gradle build output
+/android/build/
+
+# Local semantic-review artifacts
+/semantic-review/

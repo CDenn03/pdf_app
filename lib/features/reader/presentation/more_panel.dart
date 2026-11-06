@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:sefer/core/theme/reading_mode.dart';
-import 'package:sefer/core/theme/scroll_direction.dart';
+import 'package:sefer/core/theme/reader_layout_mode.dart';
 import 'package:sefer/shared/widgets/overlay_panel.dart';
 
 /// Shows the "More" panel with reading mode and scroll direction options.
@@ -9,8 +9,8 @@ Future<void> showMorePanel({
   required BuildContext context,
   required ReadingMode currentMode,
   required void Function(ReadingMode) onModeChanged,
-  required ScrollDirection currentScrollDirection,
-  required void Function(ScrollDirection) onScrollDirectionChanged,
+  required ReaderLayoutMode currentLayoutMode,
+  required void Function(ReaderLayoutMode) onLayoutModeChanged,
 }) {
   return OverlayPanel.show(
     context: context,
@@ -21,9 +21,9 @@ Future<void> showMorePanel({
         onModeChanged(mode);
         Navigator.of(ctx).pop();
       },
-      currentScrollDirection: currentScrollDirection,
-      onScrollDirectionChanged: (dir) {
-        onScrollDirectionChanged(dir);
+      currentLayoutMode: currentLayoutMode,
+      onLayoutModeChanged: (dir) {
+        onLayoutModeChanged(dir);
         Navigator.of(ctx).pop();
       },
     ),
@@ -34,14 +34,14 @@ class _MorePanelContent extends StatelessWidget {
   const _MorePanelContent({
     required this.currentMode,
     required this.onModeChanged,
-    required this.currentScrollDirection,
-    required this.onScrollDirectionChanged,
+    required this.currentLayoutMode,
+    required this.onLayoutModeChanged,
   });
 
   final ReadingMode currentMode;
   final void Function(ReadingMode) onModeChanged;
-  final ScrollDirection currentScrollDirection;
-  final void Function(ScrollDirection) onScrollDirectionChanged;
+  final ReaderLayoutMode currentLayoutMode;
+  final void Function(ReaderLayoutMode) onLayoutModeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -76,12 +76,12 @@ class _MorePanelContent extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // --- Scroll direction ---
-          Text('Scroll', style: theme.textTheme.labelMedium),
+          // --- Page layout ---
+          Text('Layout', style: theme.textTheme.labelMedium),
           const SizedBox(height: 12),
           Row(
-            children: ScrollDirection.values.map((dir) {
-              final isActive = dir == currentScrollDirection;
+            children: ReaderLayoutMode.values.map((dir) {
+              final isActive = dir == currentLayoutMode;
               return Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -90,12 +90,12 @@ class _MorePanelContent extends StatelessWidget {
                     background: theme.colorScheme.surface,
                     textColor: theme.colorScheme.onSurface,
                     isActive: isActive,
-                    onTap: () => onScrollDirectionChanged(dir),
+                    onTap: () => onLayoutModeChanged(dir),
                     leading: Icon(
                       switch (dir) {
-                        ScrollDirection.sideBySide => Icons.swap_horiz,
-                        ScrollDirection.bookFlip => Icons.menu_book_outlined,
-                        ScrollDirection.continuous => Icons.swap_vert,
+                        ReaderLayoutMode.paged => Icons.swap_horiz,
+                        ReaderLayoutMode.bookFlip => Icons.menu_book_outlined,
+                        ReaderLayoutMode.continuous => Icons.swap_vert,
                       },
                       size: 16,
                       color: isActive

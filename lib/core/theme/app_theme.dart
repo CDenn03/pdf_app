@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
@@ -9,6 +8,9 @@ import 'app_colors.dart';
 /// all body and UI text. Together they pair the "indie-publisher" warmth
 /// of Fraunces with the crisp legibility of DM Sans.
 abstract final class AppTheme {
+  static const fontSerif = 'Fraunces';
+  static const fontSans = 'DM Sans';
+
   static ThemeData get light => _build(
     brightness: Brightness.light,
     background: AppColors.lightBackground,
@@ -35,71 +37,43 @@ abstract final class AppTheme {
     required Color secondary,
     required Color divider,
   }) {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.brand,
-      brightness: brightness,
-      surface: surface,
-    ).copyWith(
-      primary: AppColors.brand,
-      onPrimary: AppColors.onBrand,
-      secondary: AppColors.ground,
-      onSecondary: AppColors.onBrand,
-      surface: surface,
-      onSurface: onSurface,
-      surfaceContainerHighest: background,
-    );
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: AppColors.brand,
+          brightness: brightness,
+          surface: surface,
+        ).copyWith(
+          primary: AppColors.brand,
+          onPrimary: AppColors.onBrand,
+          secondary: AppColors.ground,
+          onSecondary: AppColors.onBrand,
+          surface: surface,
+          onSurface: onSurface,
+          onSurfaceVariant: secondary,
+          surfaceContainerHighest: background,
+        );
 
-    // DM Sans for all UI text.
-    final textTheme = GoogleFonts.dmSansTextTheme(
-      TextTheme(
-        bodyLarge: TextStyle(fontSize: 15, color: onSurface, height: 1.5),
-        bodyMedium: TextStyle(fontSize: 14, color: onSurface, height: 1.5),
-        bodySmall: TextStyle(fontSize: 12, color: secondary, height: 1.4),
-        labelLarge: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: onSurface,
-        ),
-        labelMedium: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: secondary,
-        ),
-        titleMedium: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-          color: onSurface,
-        ),
-        titleSmall: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: onSurface,
-        ),
-        // Fraunces for display/heading styles.
-        displayLarge: GoogleFonts.fraunces(
-          fontSize: 32,
-          fontWeight: FontWeight.w700,
-          color: onSurface,
-          letterSpacing: -0.5,
-        ),
-        displayMedium: GoogleFonts.fraunces(
-          fontSize: 26,
-          fontWeight: FontWeight.w700,
-          color: onSurface,
-          letterSpacing: -0.3,
-        ),
-        headlineLarge: GoogleFonts.fraunces(
-          fontSize: 22,
-          fontWeight: FontWeight.w700,
-          color: onSurface,
-          letterSpacing: -0.2,
-        ),
-        headlineMedium: GoogleFonts.fraunces(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          color: onSurface,
-        ),
+    // Type scale: DM Sans body/UI in four steps (11 / 13 / 15 / 16),
+    // Fraunces for display/headings. Both families are bundled assets;
+    // Fraunces ships 600/700 with matching italics.
+    final textTheme = TextTheme(
+      bodyLarge: _sans(16, onSurface, height: 1.5),
+      bodyMedium: _sans(15, onSurface, height: 1.5),
+      bodySmall: _sans(13, secondary, height: 1.4),
+      labelLarge: _sans(15, onSurface, weight: FontWeight.w500),
+      labelMedium: _sans(13, secondary, weight: FontWeight.w500),
+      labelSmall: _sans(
+        11,
+        secondary,
+        weight: FontWeight.w500,
+        letterSpacing: 0.8,
       ),
+      titleMedium: _sans(16, onSurface, weight: FontWeight.w500),
+      titleSmall: _sans(15, onSurface, weight: FontWeight.w500),
+      displayLarge: _serif(32, onSurface, letterSpacing: -0.5),
+      displayMedium: _serif(26, onSurface, letterSpacing: -0.3),
+      headlineLarge: _serif(22, onSurface, letterSpacing: -0.2),
+      headlineMedium: _serif(18, onSurface, weight: FontWeight.w600),
     );
 
     return ThemeData(
@@ -143,11 +117,7 @@ abstract final class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        titleTextStyle: GoogleFonts.dmSans(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          color: onSurface,
-        ),
+        titleTextStyle: _sans(16, onSurface, weight: FontWeight.w600),
         iconTheme: IconThemeData(color: onSurface),
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -156,9 +126,37 @@ abstract final class AppTheme {
         elevation: 0,
         indicatorColor: AppColors.brandTint,
         labelTextStyle: WidgetStateProperty.all(
-          GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w500),
+          _sans(12, onSurface, weight: FontWeight.w500),
         ),
       ),
     );
   }
+
+  static TextStyle _sans(
+    double size,
+    Color color, {
+    FontWeight? weight,
+    double? height,
+    double? letterSpacing,
+  }) => TextStyle(
+    fontFamily: fontSans,
+    fontSize: size,
+    color: color,
+    fontWeight: weight,
+    height: height,
+    letterSpacing: letterSpacing,
+  );
+
+  static TextStyle _serif(
+    double size,
+    Color color, {
+    FontWeight weight = FontWeight.w700,
+    double? letterSpacing,
+  }) => TextStyle(
+    fontFamily: fontSerif,
+    fontSize: size,
+    color: color,
+    fontWeight: weight,
+    letterSpacing: letterSpacing,
+  );
 }

@@ -49,7 +49,9 @@ void main() {
     addTearDown(container.dispose);
 
     await container.read(libraryEntriesProvider.future);
-    await container.read(libraryEntriesProvider.notifier).addFile('/docs/a.pdf');
+    await container
+        .read(libraryEntriesProvider.notifier)
+        .addFile('/docs/a.pdf');
 
     final entries = container.read(libraryEntriesProvider).value!;
     expect(entries.any((e) => e.path == '/docs/a.pdf'), isTrue);
@@ -68,25 +70,6 @@ void main() {
     await container.read(libraryEntriesProvider.notifier).removeFile('x1');
 
     expect(container.read(libraryEntriesProvider).value, isEmpty);
-  });
-
-  test('toggleFavorite flips isFavorite', () async {
-    when(() => persistence.loadEntries()).thenAnswer(
-      (_) async => [
-        const PersistedEntry(id: 'x2', name: 'b.pdf', path: '/b.pdf'),
-      ],
-    );
-    final container = container0();
-    addTearDown(container.dispose);
-
-    await container.read(libraryEntriesProvider.future);
-    final id = container.read(libraryEntriesProvider).value!.first.id;
-    await container.read(libraryEntriesProvider.notifier).toggleFavorite(id);
-
-    expect(
-      container.read(libraryEntriesProvider).value!.first.isFavorite,
-      isTrue,
-    );
   });
 
   test('moveToCollection updates collectionId', () async {

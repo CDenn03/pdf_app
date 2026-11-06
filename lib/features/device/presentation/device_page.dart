@@ -1,20 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-import 'package:sefer/core/models/collection.dart';
+import 'package:sefer/features/reader/domain/reader_route_arguments.dart';
 import 'package:sefer/core/models/file_status.dart';
-import 'package:sefer/core/theme/app_colors.dart';
-import 'package:sefer/core/utils/share_utils.dart';
+import 'package:sefer/features/device/domain/device_pdf_entry.dart';
+import 'package:sefer/features/device/domain/device_sort.dart';
+import 'package:sefer/features/device/presentation/device_collection_picker.dart';
+import 'package:sefer/features/device/presentation/device_empty_states.dart';
+import 'package:sefer/features/device/presentation/device_selection_bar.dart';
+import 'package:sefer/features/device/presentation/device_sort_button.dart';
+import 'package:sefer/features/device/presentation/device_tile.dart';
+import 'package:sefer/features/device/state/device_files_providers.dart';
+import 'package:sefer/features/device/state/device_selection_purpose.dart';
 import 'package:sefer/features/home/presentation/home_shell.dart';
-import 'package:sefer/features/library/state/library_entry.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
+import 'package:sefer/shared/state/document_selection_controller.dart';
+import 'package:sefer/shared/widgets/file_actions_sheet.dart';
+import 'package:sefer/shared/widgets/selection_action_bar.dart';
 
 /// Shows all PDF files found on the device via storage scan.
 ///
-/// When [targetCollectionId] is non-null the page enters multi-select mode
-/// immediately so the user can pick files to add to that collection.
+/// When [targetCollectionId] is non-null the page selects files to add to
+/// that collection; otherwise long-pressing a row starts selecting files to
+/// manage (favorite, add to a collection).
 class DevicePage extends ConsumerStatefulWidget {
   const DevicePage({
     super.key,
@@ -24,11 +33,7 @@ class DevicePage extends ConsumerStatefulWidget {
   });
 
   final double bottomPadding;
-
-  /// If set, the page starts in selection mode to add files to this collection.
   final String? targetCollectionId;
-
-  /// Called after a bulk-add completes so the shell can return to Library.
   final VoidCallback? onDone;
 
   @override
@@ -36,212 +41,154 @@ class DevicePage extends ConsumerStatefulWidget {
 }
 
 class DevicePageState extends ConsumerState<DevicePage> {
-  final _selected = <String>{};
+  final _selection = DocumentSelectionController();
   final _searchController = TextEditingController();
   String _query = '';
-  String? _activeCollectionId;
+  late DeviceSelectionPurpose _purpose = _purposeFor(widget);
 
-  bool get _selecting => _selected.isNotEmpty || _activeCollectionId != null;
+  static DeviceSelectionPurpose _purposeFor(DevicePage widget) {
+    final id = widget.targetCollectionId;
+    return id == null ? const ManageDeviceFiles() : AddFilesToCollection(id);
+  }
+
+  String? get _targetCollectionId => switch (_purpose) {
+    AddFilesToCollection(:final collectionId) => collectionId,
+    ManageDeviceFiles() => null,
+  };
+
+  bool get _selecting => _targetCollectionId != null || _selection.isSelecting;
 
   @override
   void initState() {
     super.initState();
-    if (widget.targetCollectionId != null) {
-      _activeCollectionId = widget.targetCollectionId;
-    }
+    _selection.addListener(_onSelectionChanged);
   }
 
   @override
   void didUpdateWidget(DevicePage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.targetCollectionId != oldWidget.targetCollectionId) {
-      setState(() {
-        _activeCollectionId = widget.targetCollectionId;
-        _selected.clear();
-      });
+      _selection.clear();
+      setState(() => _purpose = _purposeFor(widget));
     }
   }
 
   @override
   void dispose() {
+    _selection.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  void clearSelection() {
-    setState(() {
-      _selected.clear();
-      _activeCollectionId = null;
-    });
+  void _onSelectionChanged() {
+    if (mounted) setState(() {});
   }
 
-  void _toggle(String path) {
-    setState(() {
-      if (_selected.contains(path)) {
-        _selected.remove(path);
-      } else {
-        _selected.add(path);
-      }
-    });
+  void clearSelection() {
+    _selection.clear();
+    setState(() => _purpose = const ManageDeviceFiles());
+  }
+
+  /// Returns true when Back was consumed by leaving selection.
+  bool handleBack() {
+    if (!_selecting) return false;
+    clearSelection();
+    return true;
   }
 
   Future<void> _addSelected() async {
-    // If not already targeting a collection, ask the user to pick or create one.
-    String? targetId = _activeCollectionId;
-    if (targetId == null && mounted) {
-      targetId = await _pickOrCreateCollection();
-      if (!mounted) return;
-      // null means user cancelled; empty string means root library.
-      if (targetId == null) return;
-    }
+    var targetId = _targetCollectionId;
+    targetId ??= await pickOrCreateCollection(context, ref);
+    if (targetId == null || !mounted) return;
+    final destination = targetId.isEmpty ? null : targetId;
 
-    final paths = List<String>.from(_selected);
+    final paths = _selection.selectedPaths;
+    final library = ref.read(libraryEntriesProvider.notifier);
     for (final path in paths) {
-      await ref.read(libraryEntriesProvider.notifier).addFile(
-        path,
-        collectionId: targetId!.isEmpty ? null : targetId,
-      );
+      await library.addFile(path, collectionId: destination);
     }
     if (!mounted) return;
 
-    final collections = ref.read(collectionsProvider).value ?? [];
-    final dest = targetId == null || targetId.isEmpty
-        ? 'library'
-        : collections
-                .firstWhere(
-                  (c) => c.id == targetId,
-                  orElse: () => const PdfCollection(id: '', name: 'collection'),
-                )
-                .name;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${paths.length} file${paths.length == 1 ? '' : 's'} added to $dest',
-        ),
-      ),
+    _showMessage(
+      '${_fileCount(paths.length)} added to ${_collectionName(destination)}',
     );
     clearSelection();
     widget.onDone?.call();
   }
 
-  /// Shows a dialog to pick an existing collection or create a new one.
-  /// Returns null if cancelled, '' for root library, or a collection id.
-  Future<String?> _pickOrCreateCollection() async {
-    final collections = ref.read(collectionsProvider).value ?? [];
-    final choice = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        title: const Text('Add to collection'),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, ''),
-            child: const Text('Library (no collection)'),
-          ),
-          for (final col in collections)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, col.id),
-              child: Text(col.name),
-            ),
-          const Divider(),
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, '__new__'),
-            child: const Text('+ New collection…'),
-          ),
-        ],
-      ),
-    );
-
-    if (choice != '__new__') return choice;
-
-    // User wants to create a new collection — show a second dialog.
-    if (!mounted) return null;
-    final name = await _showNewCollectionDialog();
-    if (name == null || name.trim().isEmpty || !mounted) return null;
-
-    await ref.read(collectionsProvider.notifier).addCollection(name.trim());
-    final updated = ref.read(collectionsProvider).value ?? [];
-    return updated.last.id;
+  Future<void> _setFavorite(bool favorite) async {
+    final paths = _selection.selectedPaths;
+    await ref
+        .read(libraryEntriesProvider.notifier)
+        .setFavoriteForPaths(paths, favorite: favorite);
+    if (!mounted) return;
+    final verb = favorite ? 'marked as favorite' : 'removed from favorites';
+    _showMessage('${_fileCount(paths.length)} $verb');
+    _selection.clear();
   }
 
-  Future<String?> _showNewCollectionDialog() {
-    final ctrl = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New collection'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Name',
-            border: OutlineInputBorder(),
-          ),
-          onSubmitted: (_) => Navigator.pop(ctx, ctrl.text),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, ctrl.text),
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
+  String _fileCount(int count) => '$count file${count == 1 ? '' : 's'}';
+
+  String _collectionName(String? id) {
+    if (id == null) return 'library';
+    final collections = ref.read(collectionsProvider).value ?? [];
+    return collections.where((c) => c.id == id).firstOrNull?.name ??
+        'collection';
+  }
+
+  void _showMessage(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  List<DevicePdfEntry> _visibleEntries(
+    List<DevicePdfEntry> all,
+    DeviceSort sort,
+  ) {
+    final query = _query.toLowerCase().trim();
+    final matching = query.isEmpty
+        ? all
+        : all.where((e) => e.name.toLowerCase().contains(query));
+    return sortDeviceEntries(matching, sort);
+  }
+
+  void _toggleAll(List<DevicePdfEntry> visible) {
+    final paths = visible.map((e) => e.path);
+    if (paths.every(_selection.isSelected)) {
+      _selection.clear();
+    } else {
+      _selection.selectVisible(paths);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // .value ?? [] handles loading/error states from AsyncNotifier (#16).
+    ref.listen(deviceFilesProvider, (_, next) {
+      final rows = next.value;
+      if (rows != null) _selection.retainExisting(rows.map((e) => e.path));
+    });
     final scanState = ref.watch(deviceFilesProvider);
-    final all = scanState.value ?? [];
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final secondary =
-        isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
-
-    final q = _query.toLowerCase().trim();
-    final entries = q.isEmpty
-        ? all
-        : all.where((e) => e.name.toLowerCase().contains(q)).toList();
-
-    final collectionName = _activeCollectionId == null
-        ? null
-        : ref
-            .watch(collectionsProvider)
-            .value
-            ?.firstWhere(
-              (c) => c.id == _activeCollectionId,
-              orElse: () => const PdfCollection(id: '', name: 'collection'),
-            )
-            .name;
+    final sort = ref.watch(deviceSortProvider);
+    final visible = _visibleEntries(scanState.value ?? [], sort);
+    final targetId = _targetCollectionId;
 
     return Column(
       children: [
         GreetingHeader(
-          subtitle: collectionName != null
-              ? 'Adding to "$collectionName"'
+          subtitle: targetId != null
+              ? 'Adding to "${_collectionName(targetId)}"'
               : 'All PDFs on device',
           title: 'Device',
           action: _selecting
               ? TextButton(
                   onPressed: clearSelection,
-                  child: Text(
-                    'Cancel',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 15,
-                      color: AppColors.brand,
-                    ),
-                  ),
+                  child: const Text('Cancel'),
                 )
-              : IconButton(
-                  icon: Icon(Icons.refresh_outlined, color: secondary),
-                  onPressed: scanState.isLoading
+              : _HeaderActions(
+                  sort: sort,
+                  onSortSelected: ref.read(deviceSortProvider.notifier).select,
+                  onRescan: scanState.isLoading
                       ? null
                       : () => ref.read(deviceFilesProvider.notifier).scan(),
-                  tooltip: 'Rescan',
                 ),
         ),
         PageSearchBar(
@@ -250,111 +197,60 @@ class DevicePageState extends ConsumerState<DevicePage> {
           hintText: 'Search device…',
         ),
         if (_selecting)
-          _SelectionHeader(
-            count: _selected.length,
-            total: entries.length,
-            onToggleAll: () {
-              setState(() {
-                if (_selected.length == entries.length) {
-                  _selected.clear();
-                } else {
-                  _selected
-                    ..clear()
-                    ..addAll(entries.map((e) => e.path));
-                }
-              });
-            },
+          DeviceSelectionHeader(
+            count: _selection.selectedPaths.length,
+            allVisibleSelected:
+                visible.isNotEmpty &&
+                visible.every((e) => _selection.isSelected(e.path)),
+            onToggleAll: () => _toggleAll(visible),
           ),
-        Expanded(child: _buildList(entries, isDark, secondary, scanState.isLoading)),
-        // Action bar sits above the floating nav bar.
-        if (_selecting && _selected.isNotEmpty)
-          _ActionBar(
-            count: _selected.length,
-            collectionName: collectionName,
-            bottomPadding: widget.bottomPadding,
-            onAdd: _addSelected,
-          ),
-        if (!_selecting)
-          SizedBox(height: widget.bottomPadding),
+        Expanded(child: _buildList(visible, scanState.isLoading)),
+        if (_selection.isSelecting) _buildActionBar(targetId),
+        if (!_selecting) SizedBox(height: widget.bottomPadding),
       ],
     );
   }
 
-  Widget _buildList(
-    List<LibraryEntry> entries,
-    bool isDark,
-    Color secondary,
-    bool isLoading,
-  ) {
-    if (isLoading) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator.adaptive(),
-            const SizedBox(height: 16),
-            Text(
-              'Scanning device…',
-              style: GoogleFonts.dmSans(fontSize: 14, color: secondary),
-            ),
-          ],
-        ),
+  Widget _buildActionBar(String? targetId) {
+    final count = _selection.selectedPaths.length;
+    if (targetId != null) {
+      return DeviceActionBar(
+        count: count,
+        collectionName: _collectionName(targetId),
+        bottomPadding: widget.bottomPadding,
+        onAdd: _addSelected,
       );
     }
+    return SelectionActionBar(
+      selectedPaths: _selection.selectedPaths,
+      favoritePaths: ref.watch(favoritePathsProvider),
+      onSetFavorite: _setFavorite,
+      bottomPadding: widget.bottomPadding,
+      extraActions: [
+        TextButton.icon(
+          onPressed: _addSelected,
+          icon: const Icon(Icons.collections_bookmark_outlined),
+          label: const Text('Add to collection'),
+        ),
+        TextButton.icon(
+          onPressed: _selection.clear,
+          icon: const Icon(Icons.close),
+          label: const Text('Clear'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildList(List<DevicePdfEntry> entries, bool isLoading) {
+    if (isLoading) return const DeviceScanningState();
 
     if (entries.isEmpty && _query.isEmpty) {
-      final permDenied =
-          ref.watch(deviceFilesProvider.notifier).permissionDenied;
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.phone_android_outlined,
-                size: 52,
-                color: secondary,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                permDenied ? 'Storage permission required' : 'No PDFs found on device',
-                style: GoogleFonts.fraunces(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                permDenied
-                    ? 'Allow storage access so the app can find your PDFs.'
-                    : 'No PDF files were found in common storage locations.',
-                style: GoogleFonts.dmSans(fontSize: 14, color: secondary),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: () =>
-                    ref.read(deviceFilesProvider.notifier).scan(),
-                icon: Icon(
-                  permDenied
-                      ? Icons.lock_open_outlined
-                      : Icons.refresh_outlined,
-                ),
-                label: Text(
-                  permDenied ? 'Grant Permission' : 'Scan Again',
-                ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.brand,
-                  foregroundColor: AppColors.onBrand,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+      final permDenied = ref
+          .watch(deviceFilesProvider.notifier)
+          .permissionDenied;
+      return DeviceEmptyState(
+        permissionDenied: permDenied,
+        onScan: () => ref.read(deviceFilesProvider.notifier).scan(),
       );
     }
 
@@ -362,330 +258,85 @@ class DevicePageState extends ConsumerState<DevicePage> {
       return Center(
         child: Text(
           'No results for "$_query"',
-          style: GoogleFonts.dmSans(fontSize: 15),
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
       );
     }
 
-    final libraryPaths = ref
-        .watch(libraryEntriesProvider)
-        .value
-        ?.map((e) => e.path)
-        .toSet() ?? {};
+    final libraryPaths =
+        ref.watch(libraryEntriesProvider).value?.map((e) => e.path).toSet() ??
+        {};
+    final favoritePaths = ref.watch(favoritePathsProvider);
 
     return ListView.builder(
       padding: EdgeInsets.zero,
       itemCount: entries.length,
       itemBuilder: (_, i) {
         final entry = entries[i];
-        final inLibrary = libraryPaths.contains(entry.path);
-        final isSelected = _selected.contains(entry.path);
-
-        return _DeviceTile(
+        final available = entry.status == FileStatus.ok;
+        return DeviceTile(
           entry: entry,
-          inLibrary: inLibrary,
-          isSelected: isSelected,
+          inLibrary: libraryPaths.contains(entry.path),
+          isFavorite: favoritePaths.contains(entry.path),
+          isSelected: _selection.isSelected(entry.path),
           selecting: _selecting,
-          onTap: () {
-            if (_selecting) {
-              _toggle(entry.path);
-            } else {
-              // Single tap outside selection mode: open directly.
-              ref.read(libraryEntriesProvider.notifier).recordOpened(entry.path);
-              context.push('/reader', extra: entry.path);
-            }
-          },
-          onLongPress: entry.status == FileStatus.ok
-              ? () {
-                  final libraryEntry = ref
-                      .read(libraryEntriesProvider)
-                      .value
-                      ?.where((e) => e.path == entry.path)
-                      .firstOrNull;
-                  showModalBottomSheet<void>(
-                    context: context,
-                    builder: (_) => SafeArea(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.open_in_new_outlined),
-                            title: const Text('Open'),
-                            onTap: () {
-                              Navigator.pop(context);
-                              ref
-                                  .read(libraryEntriesProvider.notifier)
-                                  .recordOpened(entry.path);
-                              context.push('/reader', extra: entry.path);
-                            },
-                          ),
-                          ListTile(
-                            leading: const Icon(Icons.share_outlined),
-                            title: const Text('Share'),
-                            onTap: () {
-                              Navigator.pop(context);
-                              sharePdf(context, entry.path);
-                            },
-                          ),
-                          if (libraryEntry != null)
-                            ListTile(
-                              leading:
-                                  const Icon(Icons.drive_file_rename_outline),
-                              title: const Text('Rename'),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                final newName = await showRenameDialog(
-                                  context,
-                                  currentName: libraryEntry.name,
-                                );
-                                if (newName == null ||
-                                    newName.trim().isEmpty) {
-                                  return;
-                                }
-                                await ref
-                                    .read(libraryEntriesProvider.notifier)
-                                    .renameFile(libraryEntry.id, newName);
-                              },
-                            ),
-                          ListTile(
-                            leading: const Icon(Icons.add_outlined),
-                            title: const Text('Select'),
-                            onTap: () {
-                              Navigator.pop(context);
-                              setState(() => _selected.add(entry.path));
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-              : null,
+          onTap: () => _onTileTap(entry),
+          onLongPress: available ? () => _selection.select(entry.path) : null,
+          onOverflow: available ? () => _showFileActions(entry) : null,
         );
       },
     );
   }
-}
 
-// ---------------------------------------------------------------------------
-// Selection header bar
-// ---------------------------------------------------------------------------
+  void _onTileTap(DevicePdfEntry entry) {
+    if (_selecting) {
+      _selection.toggle(entry.path);
+    } else {
+      context.push('/reader', extra: ReaderRouteArguments(path: entry.path));
+    }
+  }
 
-class _SelectionHeader extends StatelessWidget {
-  const _SelectionHeader({
-    required this.count,
-    required this.total,
-    required this.onToggleAll,
-  });
-
-  final int count;
-  final int total;
-  final VoidCallback onToggleAll;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark
-        ? AppColors.brandTint.withValues(alpha: 0.12)
-        : AppColors.brandTint;
-
-    return Container(
-      color: bg,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Row(
-        children: [
-          Checkbox(
-            value: count == total && total > 0,
-            tristate: true,
-            activeColor: AppColors.brand,
-            onChanged: (_) => onToggleAll(),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            count > 0 ? '$count selected' : 'Select files',
-            style: GoogleFonts.dmSans(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: AppColors.brand,
-            ),
-          ),
-        ],
-      ),
+  void _showFileActions(DevicePdfEntry entry) {
+    final libraryEntry = ref
+        .read(libraryEntriesProvider)
+        .value
+        ?.where((e) => e.path == entry.path)
+        .firstOrNull;
+    showFileActionsSheet(
+      context,
+      ref,
+      path: entry.path,
+      name: entry.name,
+      libraryEntryId: libraryEntry?.id,
+      canSelect: true,
+      onSelect: () => _selection.select(entry.path),
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Device file tile
-// ---------------------------------------------------------------------------
-
-class _DeviceTile extends StatelessWidget {
-  const _DeviceTile({
-    required this.entry,
-    required this.inLibrary,
-    required this.isSelected,
-    required this.selecting,
-    required this.onTap,
-    this.onLongPress,
+class _HeaderActions extends StatelessWidget {
+  const _HeaderActions({
+    required this.sort,
+    required this.onSortSelected,
+    required this.onRescan,
   });
 
-  final LibraryEntry entry;
-  final bool inLibrary;
-  final bool isSelected;
-  final bool selecting;
-  final VoidCallback onTap;
-  final VoidCallback? onLongPress;
+  final DeviceSort sort;
+  final ValueChanged<DeviceSort> onSortSelected;
+  final VoidCallback? onRescan;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final secondary =
-        isDark ? AppColors.darkSecondaryText : AppColors.lightSecondaryText;
-    final primary =
-        isDark ? AppColors.darkPrimaryText : AppColors.lightPrimaryText;
-    final colorIndex = entry.path.hashCode.abs();
-    final gradient = AppColors.coverGradientAt(colorIndex);
-
-    final bg = isSelected
-        ? AppColors.brandTint.withValues(alpha: isDark ? 0.15 : 1.0)
-        : Colors.transparent;
-
-    return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        color: bg,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        child: Row(
-          children: [
-            if (selecting)
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: Checkbox(
-                    value: isSelected,
-                    activeColor: AppColors.brand,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    onChanged: (_) => onTap(),
-                  ),
-                ),
-              ),
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: gradient,
-                ),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                Icons.picture_as_pdf_outlined,
-                size: 20,
-                color: Colors.white.withValues(alpha: 0.9),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.name,
-                    style: GoogleFonts.dmSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: primary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    entry.path,
-                    style: GoogleFonts.dmSans(fontSize: 12, color: secondary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            if (!selecting)
-              Icon(
-                inLibrary ? Icons.check_circle_outline : Icons.chevron_right,
-                size: 18,
-                color: inLibrary ? AppColors.brand : secondary,
-              ),
-          ],
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DeviceSortButton(sort: sort, onSelected: onSortSelected),
+        IconButton(
+          icon: const Icon(Icons.refresh_outlined),
+          onPressed: onRescan,
+          tooltip: 'Rescan',
         ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Bottom action bar (floats above the pill nav)
-// ---------------------------------------------------------------------------
-
-class _ActionBar extends StatelessWidget {
-  const _ActionBar({
-    required this.count,
-    required this.collectionName,
-    required this.bottomPadding,
-    required this.onAdd,
-  });
-
-  final int count;
-  final String? collectionName;
-  final double bottomPadding;
-  final VoidCallback onAdd;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? AppColors.darkSurface : AppColors.lightSurface;
-    final border = isDark ? AppColors.darkDivider : AppColors.lightDivider;
-    final label = collectionName != null
-        ? 'Add $count to "$collectionName"'
-        : 'Add $count to collection…';
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottomPadding),
-      decoration: BoxDecoration(
-        color: bg,
-        border: Border(top: BorderSide(color: border)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: FilledButton(
-        onPressed: onAdd,
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.brand,
-          minimumSize: const Size.fromHeight(48),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.dmSans(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: AppColors.onBrand,
-          ),
-        ),
-      ),
+      ],
     );
   }
 }

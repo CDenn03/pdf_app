@@ -12,17 +12,25 @@ final recentsStoreProvider = Provider<RecentsStore>((ref) => RecentsService());
 /// in the library. Persisted across restarts via [RecentsStore].
 class RecentsNotifier extends Notifier<List<RecentEntry>> {
   late final RecentsStore _service;
+  late final Future<void> ready;
 
   @override
   List<RecentEntry> build() {
     _service = ref.read(recentsStoreProvider);
-    _load();
+    ready = _load();
     return [];
   }
 
   Future<void> _load() async {
     state = await _service.load();
   }
+
+  /// Re-reads the persisted list.
+  ///
+  /// Needed because a rename or delete rewrites the recents rows through
+  /// [RecentsStore] directly (via `DocumentKeyStore`), which leaves this
+  /// notifier's in-memory list stale until it reloads.
+  Future<void> reload() => _load();
 
   /// Records that the file at [path] was opened right now.
   Future<void> recordOpened(String path) async {
@@ -31,5 +39,6 @@ class RecentsNotifier extends Notifier<List<RecentEntry>> {
   }
 }
 
-final recentsProvider =
-    NotifierProvider<RecentsNotifier, List<RecentEntry>>(RecentsNotifier.new);
+final recentsProvider = NotifierProvider<RecentsNotifier, List<RecentEntry>>(
+  RecentsNotifier.new,
+);

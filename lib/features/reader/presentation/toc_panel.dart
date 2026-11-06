@@ -2,10 +2,10 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:pdfrx/pdfrx.dart' show PdfViewerController;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import 'package:sefer/core/services/chapter_extractor.dart';
+import 'package:sefer/features/reader/domain/auxiliary_document_status.dart';
 import 'package:sefer/shared/widgets/overlay_panel.dart';
 
 /// Session-level chapter cache keyed by PDF path (pdfId).
@@ -22,8 +22,9 @@ final Map<String, List<DetectedChapter>> _chapterCache = {};
 /// stays responsive during processing.
 Future<void> showTocPanel({
   required BuildContext context,
-  required PdfViewerController pdfController,
+  required ValueChanged<int> onPageSelected,
   required PdfDocument? document,
+  required AuxiliaryDocumentStatus documentStatus,
   required String pdfId,
 }) {
   return OverlayPanel.show(
@@ -31,12 +32,13 @@ Future<void> showTocPanel({
     title: 'Contents',
     builder: (ctx) => _TocPanelContent(
       document: document,
+      documentStatus: documentStatus,
       pdfId: pdfId,
-      onNavigate: (page) {
+      onPageSelected: (page) {
         Navigator.of(ctx).pop();
         Future.delayed(
           const Duration(milliseconds: 300),
-          () => pdfController.goToPage(pageNumber: page),
+          () => onPageSelected(page),
         );
       },
     ),
@@ -46,13 +48,15 @@ Future<void> showTocPanel({
 class _TocPanelContent extends StatefulWidget {
   const _TocPanelContent({
     required this.document,
+    required this.documentStatus,
     required this.pdfId,
-    required this.onNavigate,
+    required this.onPageSelected,
   });
 
   final PdfDocument? document;
+  final AuxiliaryDocumentStatus documentStatus;
   final String pdfId;
-  final void Function(int page) onNavigate;
+  final ValueChanged<int> onPageSelected;
 
   @override
   State<_TocPanelContent> createState() => _TocPanelContentState();
@@ -142,7 +146,15 @@ class _TocPanelContentState extends State<_TocPanelContent> {
           final idx = doc.pages.indexOf(destination.page);
           if (idx >= 0) page = idx + 1;
         }
-      } catch (_) {}
+      } catch (e, s) {
+        developer.log(
+          'bookmark destination unresolved: ${bookmark.title}',
+          name: 'sefer.toc',
+          level: 900,
+          error: e,
+          stackTrace: s,
+        );
+      }
 
       entries.add(_TocEntry(title: bookmark.title, page: page, depth: depth));
 
@@ -155,6 +167,10 @@ class _TocPanelContentState extends State<_TocPanelContent> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    if (widget.document == null) {
+      return _TocUnavailable(status: widget.documentStatus);
+    }
 
     if (_loading) {
       return const Padding(
@@ -242,13 +258,35 @@ class _TocPanelContentState extends State<_TocPanelContent> {
               return _TocItem(
                 entry: entry,
                 onTap: entry.page != null
-                    ? () => widget.onNavigate(entry.page!)
+                    ? () => widget.onPageSelected(entry.page!)
                     : null,
               );
             },
           ),
         ),
       ],
+    );
+  }
+}
+
+class _TocUnavailable extends StatelessWidget {
+  const _TocUnavailable({required this.status});
+
+  final AuxiliaryDocumentStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final failed = status == AuxiliaryDocumentStatus.failed;
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Center(
+        child: Text(
+          failed
+              ? 'Contents could not be loaded for this document.'
+              : 'Contents are still loading. Try again in a moment.',
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 }

@@ -6,10 +6,12 @@ import 'package:sefer/core/database/database_helper.dart';
 import 'package:sefer/core/database/note_entry_dao.dart';
 import 'package:sefer/core/models/annotation_color.dart';
 import 'package:sefer/core/services/app_settings_service.dart';
+import 'package:sefer/core/services/document_keys_service.dart';
 import 'package:sefer/core/services/file_service.dart';
 import 'package:sefer/core/services/reading_progress_service.dart';
 import 'package:sefer/core/theme/reading_mode.dart';
-import 'package:sefer/core/theme/scroll_direction.dart';
+import 'package:sefer/core/theme/reader_layout_mode.dart';
+import 'package:sefer/features/recents/state/recents_notifier.dart';
 
 /// Core infrastructure providers shared across features.
 
@@ -36,8 +38,25 @@ final fileServiceProvider = Provider<FileChecker>((ref) {
   return const FileService();
 });
 
+/// The same [FileService], exposed under its mutating contract.
+///
+/// Kept separate from [fileServiceProvider] so that a surface which only
+/// inspects files cannot reach rename/delete by accident, and so tests can
+/// override the two halves independently.
+final fileMutatorProvider = Provider<FileMutator>((ref) {
+  return const FileService();
+});
+
 final readingProgressProvider = Provider<ReadingProgressStore>((ref) {
   return ReadingProgressService();
+});
+
+final documentKeyStoreProvider = Provider<DocumentKeyStore>((ref) {
+  return DocumentKeyService(
+    annotationDao: ref.watch(annotationDaoProvider),
+    progress: ref.watch(readingProgressProvider),
+    recents: ref.watch(recentsStoreProvider),
+  );
 });
 
 final appSettingsServiceProvider = Provider<AppSettingsStore>((ref) {
@@ -75,9 +94,8 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
     await ref.read(appSettingsServiceProvider).save(state);
   }
 
-  /// Updates the global scroll direction and persists it.
-  Future<void> setScrollDirection(ScrollDirection direction) async {
-    state = state.copyWith(scrollDirection: direction);
+  Future<void> setReaderLayoutMode(ReaderLayoutMode mode) async {
+    state = state.copyWith(layoutMode: mode);
     await ref.read(appSettingsServiceProvider).save(state);
   }
 
