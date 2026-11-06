@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'package:sefer/core/providers.dart';
 import 'package:sefer/core/theme/app_colors.dart';
+import 'package:sefer/core/theme/app_theme.dart';
 import 'package:sefer/core/theme/reading_mode.dart';
-import 'package:sefer/core/theme/scroll_direction.dart';
+import 'package:sefer/core/theme/reader_layout_mode.dart';
 import 'package:sefer/features/home/presentation/home_shell.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -75,21 +75,25 @@ class SettingsPage extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 24),
-                const SectionLabel('Scroll direction'),
+                const SectionLabel('Page layout'),
                 const SizedBox(height: 4),
                 _OptionsCard(
                   isDark: isDark,
                   divider: divider,
                   children: [
-                    for (int i = 0; i < ScrollDirection.values.length; i++) ...[
+                    for (
+                      int i = 0;
+                      i < ReaderLayoutMode.values.length;
+                      i++
+                    ) ...[
                       if (i > 0) Divider(height: 1, color: divider),
                       _OptionRow(
-                        label: ScrollDirection.values[i].label,
+                        label: ReaderLayoutMode.values[i].label,
                         selected:
-                            settings.scrollDirection ==
-                            ScrollDirection.values[i],
-                        onTap: () => notifier
-                            .setScrollDirection(ScrollDirection.values[i]),
+                            settings.layoutMode == ReaderLayoutMode.values[i],
+                        onTap: () => notifier.setReaderLayoutMode(
+                          ReaderLayoutMode.values[i],
+                        ),
                       ),
                     ],
                   ],
@@ -142,8 +146,9 @@ class _OptionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final primary =
-        isDark ? AppColors.darkPrimaryText : AppColors.lightPrimaryText;
+    final primary = isDark
+        ? AppColors.darkPrimaryText
+        : AppColors.lightPrimaryText;
 
     return InkWell(
       onTap: onTap,
@@ -155,7 +160,8 @@ class _OptionRow extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: GoogleFonts.dmSans(
+                style: TextStyle(
+                  fontFamily: AppTheme.fontSans,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                   color: primary,

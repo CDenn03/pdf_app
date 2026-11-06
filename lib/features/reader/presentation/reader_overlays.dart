@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pdfrx/pdfrx.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf_pdf;
 
 import 'package:sefer/core/models/annotation.dart' as app;
@@ -8,6 +7,7 @@ import 'package:sefer/core/models/annotation_type.dart';
 import 'package:sefer/features/reader/presentation/annotation_toolbar.dart';
 import 'package:sefer/features/reader/presentation/gesture_handler.dart';
 import 'package:sefer/features/reader/presentation/highlight_painter.dart';
+import 'package:sefer/features/reader/presentation/reader_page_geometry.dart';
 import 'package:sefer/features/reader/presentation/reader_sheets.dart';
 import 'package:sefer/features/reader/state/providers.dart';
 
@@ -107,8 +107,7 @@ class BookmarkTapTarget extends StatelessWidget {
 class ReaderPageOverlay extends ConsumerWidget {
   const ReaderPageOverlay({
     super.key,
-    required this.pageRectInViewer,
-    required this.page,
+    required this.geometry,
     required this.annotating,
     required this.pdfId,
     required this.activeTool,
@@ -116,8 +115,7 @@ class ReaderPageOverlay extends ConsumerWidget {
     required this.onAddBookmark,
   });
 
-  final Rect pageRectInViewer;
-  final PdfPage page;
+  final ReaderPageGeometry geometry;
   final bool annotating;
   final String pdfId;
   final AnnotationTool activeTool;
@@ -126,9 +124,9 @@ class ReaderPageOverlay extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pageSize = pageRectInViewer.size;
-    final pageNumber = page.pageNumber;
-    final pdfPageSize = Size(page.width, page.height);
+    final pageSize = geometry.renderedRect.size;
+    final pageNumber = geometry.pageNumber;
+    final pdfPageSize = geometry.pageSize;
 
     final annotations = ref
         .watch(annotationNotifierProvider.select((m) => m[pageNumber] ?? []))

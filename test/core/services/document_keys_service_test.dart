@@ -87,12 +87,11 @@ void main() {
     });
   }
 
-  Future<int> noteCount(String annotationId) async =>
-      (await db.query(
-        'note_entries',
-        where: 'annotation_id = ?',
-        whereArgs: [annotationId],
-      )).length;
+  Future<int> noteCount(String annotationId) async => (await db.query(
+    'note_entries',
+    where: 'annotation_id = ?',
+    whereArgs: [annotationId],
+  )).length;
 
   group('moveDocument', () {
     test('reaches all three stores', () async {
@@ -119,6 +118,20 @@ void main() {
       expect(after.single.path, newPath);
       expect(after.single.name, 'New');
       expect(after.single.openedAt, openedAt);
+    });
+
+    test('reports a failed store and still moves the others', () async {
+      await progress.saveLastPage('/old.pdf', 8);
+      await db.close();
+
+      final failures = await keys.moveDocument(
+        oldPath: '/old.pdf',
+        newPath: '/new.pdf',
+        newName: 'New',
+      );
+
+      expect(failures.map((f) => f.store), ['annotations']);
+      expect(await progress.getLastPage('/new.pdf'), 8);
     });
 
     test('is a safe no-op for a path with nothing stored', () async {

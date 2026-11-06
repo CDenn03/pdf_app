@@ -36,18 +36,26 @@ Widget _sliverHost(Widget sliver) {
 
 Widget _tileHost(Widget child) {
   return ProviderScope(
-    child: MaterialApp(theme: AppTheme.light, home: Scaffold(body: child)),
+    child: MaterialApp(
+      theme: AppTheme.light,
+      home: Scaffold(body: child),
+    ),
   );
 }
 
 void main() {
   group('CollectionGrid', () {
-    testWidgets('shows Favorites card first with favorite count', (tester) async {
+    testWidgets('shows Favorites card first with favorite count', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _sliverHost(
           CollectionGrid(
             collections: const [],
-            entries: [_entry(favorite: true), _entry(id: 'e2', favorite: true)],
+            entries: [
+              _entry(favorite: true),
+              _entry(id: 'e2', favorite: true),
+            ],
           ),
         ),
       );
@@ -55,7 +63,9 @@ void main() {
       expect(find.text('2 files'), findsOneWidget);
     });
 
-    testWidgets('renders collection cards with per-collection counts', (tester) async {
+    testWidgets('renders collection cards with per-collection counts', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         _sliverHost(
           CollectionGrid(
@@ -80,7 +90,10 @@ void main() {
     testWidgets('singular file label', (tester) async {
       await tester.pumpWidget(
         _sliverHost(
-          CollectionGrid(collections: const [], entries: [_entry(favorite: true)]),
+          CollectionGrid(
+            collections: const [],
+            entries: [_entry(favorite: true)],
+          ),
         ),
       );
       expect(find.text('1 file'), findsOneWidget);
@@ -89,7 +102,9 @@ void main() {
 
   group('LibraryEntryTile', () {
     testWidgets('shows favorite tag and heart trailing', (tester) async {
-      await tester.pumpWidget(_tileHost(LibraryEntryTile(entry: _entry(favorite: true))));
+      await tester.pumpWidget(
+        _tileHost(LibraryEntryTile(entry: _entry(favorite: true))),
+      );
       expect(find.text('Doc.pdf'), findsOneWidget);
       expect(find.text('Favorite'), findsOneWidget);
       expect(find.byIcon(Icons.favorite), findsOneWidget);

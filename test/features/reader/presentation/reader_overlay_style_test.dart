@@ -8,8 +8,7 @@ import 'package:sefer/features/reader/presentation/reader_overlay_style.dart';
 
 void main() {
   group('readerOverlayStyle', () {
-    SystemUiOverlayStyle styleFor(ReadingMode mode) =>
-        readerOverlayStyle(mode);
+    SystemUiOverlayStyle styleFor(ReadingMode mode) => readerOverlayStyle(mode);
 
     test('dark reading mode asks for light icons', () {
       expect(styleFor(ReadingMode.dark), AppSystemUi.lightIcons);

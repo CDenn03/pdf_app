@@ -53,13 +53,15 @@ void main() {
       ],
     );
 
-    when(() => dao.getByPdfAndPageRange(any(), any(), any()))
-        .thenAnswer((_) async => []);
+    when(
+      () => dao.getByPdfAndPageRange(any(), any(), any()),
+    ).thenAnswer((_) async => []);
     when(() => dao.upsert(any())).thenAnswer((_) async {});
     when(() => dao.softDelete(any())).thenAnswer((_) async {});
     when(() => noteEntryDao.insert(any())).thenAnswer((_) async {});
-    when(() => noteEntryDao.getForAnnotation(any()))
-        .thenAnswer((_) async => []);
+    when(
+      () => noteEntryDao.getForAnnotation(any()),
+    ).thenAnswer((_) async => []);
   });
 
   tearDown(() => container.dispose());
@@ -81,8 +83,9 @@ void main() {
         type: AnnotationType.highlight,
         rects: _rects,
       );
-      when(() => dao.getByPdfAndPageRange('pdf1', 1, 3))
-          .thenAnswer((_) async => [annotation]);
+      when(
+        () => dao.getByPdfAndPageRange('pdf1', 1, 3),
+      ).thenAnswer((_) async => [annotation]);
 
       await notifier().loadForPage('pdf1', 2);
 
@@ -92,6 +95,52 @@ void main() {
     test('clamps startPage to 1 when page is 1', () async {
       await notifier().loadForPage('pdf1', 1);
       verify(() => dao.getByPdfAndPageRange('pdf1', 1, 2)).called(1);
+    });
+  });
+
+  group('flushWrites', () {
+    test('completes only after queued upserts finish', () async {
+      final gate = Completer<void>();
+      when(() => dao.upsert(any())).thenAnswer((_) => gate.future);
+
+      notifier().addHighlight(rects: _rects, page: 1, pdfId: 'pdf1');
+      var flushed = false;
+      final flush = notifier().flushWrites().then((_) => flushed = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(flushed, isFalse);
+
+      gate.complete();
+      await flush;
+
+      expect(flushed, isTrue);
+      verify(() => dao.upsert(any())).called(1);
+    });
+
+    test('completes immediately when nothing is pending', () async {
+      await notifier().flushWrites();
+    });
+
+    test('waits for an in-flight note and its entry', () async {
+      final gate = Completer<void>();
+      when(() => noteEntryDao.insert(any())).thenAnswer((_) => gate.future);
+
+      unawaited(
+        notifier().addNote(
+          edgePosition: _edgePos,
+          initialText: 'hi',
+          page: 1,
+          pdfId: 'pdf1',
+        ),
+      );
+      var flushed = false;
+      final flush = notifier().flushWrites().then((_) => flushed = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(flushed, isFalse);
+
+      gate.complete();
+      await flush;
+
+      verify(() => noteEntryDao.insert(any())).called(1);
     });
   });
 
@@ -129,12 +178,14 @@ void main() {
     });
 
     test('inserts initial note entry via NoteEntryDao', () async {
-      unawaited(notifier().addNote(
-        edgePosition: _edgePos,
-        initialText: 'hello',
-        page: 1,
-        pdfId: 'pdf1',
-      ));
+      unawaited(
+        notifier().addNote(
+          edgePosition: _edgePos,
+          initialText: 'hello',
+          page: 1,
+          pdfId: 'pdf1',
+        ),
+      );
       // Give the async insert a chance to run.
       await Future<void>.delayed(Duration.zero);
       verify(() => noteEntryDao.insert(any())).called(1);
@@ -185,12 +236,14 @@ void main() {
 
     test('undoes in LIFO order', () async {
       notifier().addHighlight(rects: _rects, page: 1, pdfId: 'pdf1');
-      unawaited(notifier().addNote(
-        edgePosition: _edgePos,
-        initialText: 'note',
-        page: 1,
-        pdfId: 'pdf1',
-      ));
+      unawaited(
+        notifier().addNote(
+          edgePosition: _edgePos,
+          initialText: 'note',
+          page: 1,
+          pdfId: 'pdf1',
+        ),
+      );
 
       final msg1 = await notifier().undo();
       expect(msg1, 'Note removed');

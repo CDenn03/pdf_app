@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:sefer/features/reader/domain/reader_route_arguments.dart';
 import 'package:sefer/core/constants.dart';
 import 'package:sefer/features/home/presentation/home_shell.dart';
 import 'package:sefer/features/library/presentation/collection_screen.dart';
 import 'package:sefer/features/reader/presentation/reader_page.dart';
+import 'package:sefer/features/recents/presentation/recents_page.dart';
 import 'package:sefer/features/settings/presentation/settings_page.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -18,8 +20,13 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/favorites',
       name: 'favorites',
+      builder: (context, state) => const CollectionScreen(isFavorites: true),
+    ),
+    GoRoute(
+      path: '/recents',
+      name: 'recents',
       builder: (context, state) =>
-          const CollectionScreen(isFavorites: true),
+          RecentsPage(initialSelectedPath: state.extra as String?),
     ),
     GoRoute(
       path: '/collection/:id',
@@ -33,8 +40,14 @@ final GoRouter appRouter = GoRouter(
       path: '/reader',
       name: 'reader',
       builder: (context, state) {
-        final pdfPath = state.extra as String? ?? kSamplePdfPath;
-        return ReaderPage(pdfPath: pdfPath);
+        final args =
+            state.extra as ReaderRouteArguments? ??
+            const ReaderRouteArguments(path: kSamplePdfPath);
+        return ReaderPage(
+          pdfPath: args.path,
+          initialPage: args.initialPage,
+          recordOpened: args.recordOpened,
+        );
       },
     ),
     GoRoute(

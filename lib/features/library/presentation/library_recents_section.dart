@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:sefer/features/reader/domain/reader_route_arguments.dart';
 import 'package:sefer/core/theme/app_colors.dart';
 import 'package:sefer/core/theme/app_spacing.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
 import 'package:sefer/features/recents/state/recents_notifier.dart';
 import 'package:sefer/features/home/presentation/home_shell.dart';
-import 'package:sefer/shared/widgets/file_actions_sheet.dart';
+import 'package:sefer/core/utils/time_ago.dart';
 
 class RecentFilesSection extends StatelessWidget {
   const RecentFilesSection({super.key, required this.recents});
@@ -19,7 +20,7 @@ class RecentFilesSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionLabel('Recently opened'),
+        const _RecentsHeading(),
         SizedBox(
           height: 136,
           child: ListView.separated(
@@ -31,6 +32,26 @@ class RecentFilesSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.xs),
+      ],
+    );
+  }
+}
+
+class _RecentsHeading extends StatelessWidget {
+  const _RecentsHeading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Expanded(child: SectionLabel('Recently opened')),
+        Padding(
+          padding: const EdgeInsets.only(right: AppSpacing.lg),
+          child: TextButton(
+            onPressed: () => context.push('/recents'),
+            child: const Text('See all'),
+          ),
+        ),
       ],
     );
   }
@@ -48,13 +69,14 @@ class RecentCard extends ConsumerWidget {
     final scheme = theme.colorScheme;
     final title = entry.name.replaceAll('.pdf', '');
     final gradient = AppColors.coverGradientAt(colorIndex);
+    final isFavorite = ref.watch(favoritePathsProvider).contains(entry.path);
 
     return Semantics(
       button: true,
       label: 'Open $title',
       child: GestureDetector(
         onTap: () => _open(context, ref),
-        onLongPress: () => _showActions(context, ref),
+        onLongPress: () => context.push('/recents', extra: entry.path),
         child: Container(
           width: 96,
           decoration: BoxDecoration(
@@ -96,9 +118,22 @@ class RecentCard extends ConsumerWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      _timeAgo(entry.openedAt),
-                      style: theme.textTheme.labelSmall,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            formatTimeAgo(entry.openedAt),
+                            style: theme.textTheme.labelSmall,
+                          ),
+                        ),
+                        if (isFavorite)
+                          const Icon(
+                            Icons.favorite,
+                            size: 12,
+                            color: AppColors.brand,
+                            semanticLabel: 'Favorite',
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -111,30 +146,6 @@ class RecentCard extends ConsumerWidget {
   }
 
   void _open(BuildContext context, WidgetRef ref) {
-    ref.read(recentsProvider.notifier).recordOpened(entry.path);
-    context.push('/reader', extra: entry.path);
-  }
-
-  void _showActions(BuildContext context, WidgetRef ref) {
-    final libraryEntry = ref
-        .read(libraryEntriesProvider)
-        .value
-        ?.where((e) => e.path == entry.path)
-        .firstOrNull;
-    showFileActionsSheet(
-      context,
-      ref,
-      path: entry.path,
-      name: entry.name,
-      libraryEntryId: libraryEntry?.id,
-    );
-  }
-
-  String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
+    context.push('/reader', extra: ReaderRouteArguments(path: entry.path));
   }
 }

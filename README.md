@@ -30,7 +30,7 @@ You can download the latest production APK directly to your Android device here:
 | PDF manipulation | [syncfusion_flutter_pdf](https://pub.dev/packages/syncfusion_flutter_pdf) |
 | Local database | [sqflite](https://pub.dev/packages/sqflite) |
 | Persistence | [shared_preferences](https://pub.dev/packages/shared_preferences) |
-| Fonts | [google_fonts](https://pub.dev/packages/google_fonts) |
+| Fonts | Bundled Fraunces & DM Sans (assets/fonts) |
 
 ## Getting Started
 

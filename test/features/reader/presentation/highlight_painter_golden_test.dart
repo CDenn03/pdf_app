@@ -47,7 +47,9 @@ Widget _buildPainter({
 
 void main() {
   group('HighlightPainter golden tests', () {
-    testWidgets('renders nothing when annotations list is empty', (tester) async {
+    testWidgets('renders nothing when annotations list is empty', (
+      tester,
+    ) async {
       await tester.pumpWidget(_buildPainter(annotations: const []));
       await expectLater(
         find.byKey(_painterKey),
@@ -59,9 +61,14 @@ void main() {
       await tester.pumpWidget(
         _buildPainter(
           annotations: [
-            _highlight(const RelativeRectModel(
-              left: 0.1, top: 0.1, right: 0.9, bottom: 0.2,
-            )),
+            _highlight(
+              const RelativeRectModel(
+                left: 0.1,
+                top: 0.1,
+                right: 0.9,
+                bottom: 0.2,
+              ),
+            ),
           ],
         ),
       );
@@ -75,18 +82,29 @@ void main() {
       await tester.pumpWidget(
         _buildPainter(
           annotations: [
-            _highlight(const RelativeRectModel(
-              left: 0.1, top: 0.1, right: 0.9, bottom: 0.18,
-            )),
             _highlight(
               const RelativeRectModel(
-                left: 0.1, top: 0.3, right: 0.7, bottom: 0.38,
+                left: 0.1,
+                top: 0.1,
+                right: 0.9,
+                bottom: 0.18,
+              ),
+            ),
+            _highlight(
+              const RelativeRectModel(
+                left: 0.1,
+                top: 0.3,
+                right: 0.7,
+                bottom: 0.38,
               ),
               color: AnnotationColor.green,
             ),
             _highlight(
               const RelativeRectModel(
-                left: 0.2, top: 0.5, right: 0.8, bottom: 0.58,
+                left: 0.2,
+                top: 0.5,
+                right: 0.8,
+                bottom: 0.58,
               ),
               color: AnnotationColor.blue,
             ),
@@ -103,12 +121,20 @@ void main() {
       await tester.pumpWidget(
         _buildPainter(
           annotations: [
-            _highlight(const RelativeRectModel(
-              left: 0.1, top: 0.1, right: 0.6, bottom: 0.3,
-            )),
             _highlight(
               const RelativeRectModel(
-                left: 0.4, top: 0.2, right: 0.9, bottom: 0.4,
+                left: 0.1,
+                top: 0.1,
+                right: 0.6,
+                bottom: 0.3,
+              ),
+            ),
+            _highlight(
+              const RelativeRectModel(
+                left: 0.4,
+                top: 0.2,
+                right: 0.9,
+                bottom: 0.4,
               ),
               color: AnnotationColor.pink,
             ),
@@ -125,9 +151,14 @@ void main() {
       await tester.pumpWidget(
         _buildPainter(
           annotations: [
-            _highlight(const RelativeRectModel(
-              left: 0.0, top: 0.45, right: 1.0, bottom: 0.55,
-            )),
+            _highlight(
+              const RelativeRectModel(
+                left: 0.0,
+                top: 0.45,
+                right: 1.0,
+                bottom: 0.55,
+              ),
+            ),
           ],
         ),
       );

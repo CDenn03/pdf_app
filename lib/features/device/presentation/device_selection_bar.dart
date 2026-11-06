@@ -7,12 +7,12 @@ class DeviceSelectionHeader extends StatelessWidget {
   const DeviceSelectionHeader({
     super.key,
     required this.count,
-    required this.total,
+    required this.allVisibleSelected,
     required this.onToggleAll,
   });
 
   final int count;
-  final int total;
+  final bool allVisibleSelected;
   final VoidCallback onToggleAll;
 
   @override
@@ -31,17 +31,20 @@ class DeviceSelectionHeader extends StatelessWidget {
       child: Row(
         children: [
           Checkbox(
-            value: count == total && total > 0,
+            value: allVisibleSelected ? true : (count > 0 ? null : false),
             tristate: true,
             activeColor: AppColors.brand,
             onChanged: (_) => onToggleAll(),
           ),
           const SizedBox(width: AppSpacing.xs),
-          Text(
-            count > 0 ? '$count selected' : 'Select files',
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(color: AppColors.brand),
+          Expanded(
+            child: Text(
+              count > 0 ? '$count selected' : 'Select files',
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(color: AppColors.brand),
+            ),
           ),
         ],
       ),

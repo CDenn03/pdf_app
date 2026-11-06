@@ -64,5 +64,31 @@ void main() {
       expect(debounce.duration, const Duration(milliseconds: 300));
       debounce.dispose();
     });
+
+    test('flush runs the pending callback immediately and only once', () async {
+      final debounce = Debounce(duration: const Duration(milliseconds: 100));
+      var callCount = 0;
+
+      debounce.run(() => callCount++);
+      debounce.flush();
+      await Future.delayed(const Duration(milliseconds: 150));
+
+      expect(callCount, 1);
+    });
+
+    test('flush without a pending callback does nothing', () {
+      expect(Debounce().flush, returnsNormally);
+    });
+
+    test('flush after dispose does not run the discarded callback', () {
+      final debounce = Debounce();
+      var callCount = 0;
+
+      debounce.run(() => callCount++);
+      debounce.dispose();
+      debounce.flush();
+
+      expect(callCount, 0);
+    });
   });
 }

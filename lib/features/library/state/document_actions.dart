@@ -5,26 +5,23 @@ import 'package:path/path.dart' as p;
 import 'package:sefer/core/constants.dart';
 import 'package:sefer/core/providers.dart';
 import 'package:sefer/core/services/file_service.dart';
+import 'package:sefer/features/library/state/document_rename_result.dart';
 import 'package:sefer/features/library/state/library_entry.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
 import 'package:sefer/features/recents/state/recents_notifier.dart';
+import 'package:sefer/features/device/state/device_files_providers.dart';
 
 /// Result of a document action, carrying user-facing copy rather than an
 /// exception, so every call site reports failure the same way.
 class DocumentActionResult {
-  const DocumentActionResult._({this.newPath, this.message, this.undo});
+  const DocumentActionResult._({this.message, this.undo});
 
-  /// The action completed. [newPath] is set by a rename.
-  const DocumentActionResult.success({
-    String? newPath,
-    void Function()? undo,
-  }) : this._(newPath: newPath, undo: undo);
+  const DocumentActionResult.success({void Function()? undo})
+    : this._(undo: undo);
 
   /// The action did not happen. [message] is ready to show to the user.
-  const DocumentActionResult.failure(String message)
-    : this._(message: message);
+  const DocumentActionResult.failure(String message) : this._(message: message);
 
-  final String? newPath;
   final String? message;
 
   /// Set only where the action is reversible (remove from library).
@@ -65,12 +62,12 @@ class DocumentActions {
   ///
   /// [newName] is the stem the user typed, without an extension;
   /// [FileMutator.rename] owns extension policy.
-  Future<DocumentActionResult> rename({
+  Future<DocumentRenameResult> rename({
     required String path,
     required String newName,
   }) async {
     if (isBundled(path)) {
-      return const DocumentActionResult.failure(
+      return const DocumentRenameRejected(
         'The bundled sample cannot be renamed.',
       );
     }
@@ -79,34 +76,30 @@ class DocumentActions {
     try {
       newPath = await _ref.read(fileMutatorProvider).rename(path, newName);
     } on FileOperationException catch (e) {
-      return DocumentActionResult.failure(_renameMessage(e));
+      return DocumentRenameRejected(_renameMessage(e));
     }
 
-    if (newPath == path) {
-      return DocumentActionResult.success(newPath: newPath);
-    }
+    if (newPath == path) return DocumentRenameSuccess(newPath);
 
     final resolvedName = p.basename(newPath);
 
     // Annotations, notes, bookmarks, reading progress and recents are all
     // keyed by path, so they move before anything re-reads the lists.
-    await _ref.read(documentKeyStoreProvider).moveDocument(
-      oldPath: path,
-      newPath: newPath,
-      newName: resolvedName,
-    );
+    final failures = await _ref
+        .read(documentKeyStoreProvider)
+        .moveDocument(oldPath: path, newPath: newPath, newName: resolvedName);
 
-    await _ref.read(libraryEntriesProvider.notifier).applyRename(
-      oldPath: path,
-      newPath: newPath,
-      newName: resolvedName,
-    );
+    await _ref
+        .read(libraryEntriesProvider.notifier)
+        .applyRename(oldPath: path, newPath: newPath, newName: resolvedName);
     _ref
         .read(deviceFilesProvider.notifier)
         .applyRename(oldPath: path, newPath: newPath);
     await _ref.read(recentsProvider.notifier).reload();
 
-    return DocumentActionResult.success(newPath: newPath);
+    return failures.isEmpty
+        ? DocumentRenameSuccess(newPath)
+        : DocumentRenamePartiallyMigrated(newPath, failures);
   }
 
   /// Permanently deletes the file at [path] and erases all of its stored
@@ -153,9 +146,7 @@ class DocumentActions {
 
     await _ref.read(libraryEntriesProvider.notifier).removeByPath(path);
 
-    return DocumentActionResult.success(
-      undo: () => _restore(entry),
-    );
+    return DocumentActionResult.success(undo: () => _restore(entry));
   }
 
   void _restore(LibraryEntry entry) {

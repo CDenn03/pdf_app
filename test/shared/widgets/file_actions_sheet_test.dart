@@ -87,9 +87,7 @@ void main() {
     expect(find.text('Rename'), findsOneWidget);
   });
 
-  testWidgets('unavailable entry hides Open, Share and Rename', (
-    tester,
-  ) async {
+  testWidgets('unavailable entry hides Open, Share and Rename', (tester) async {
     await openSheet(tester, status: FileStatus.missing);
 
     expect(find.text('Open'), findsNothing);
@@ -147,14 +145,8 @@ void main() {
     expect(find.text('Remove from library'), findsNothing);
   });
 
-  testWidgets('bundled sample hides Rename, Remove and Delete', (
-    tester,
-  ) async {
-    await openSheet(
-      tester,
-      path: kSamplePdfPath,
-      name: 'sample.pdf',
-    );
+  testWidgets('bundled sample hides Rename, Remove and Delete', (tester) async {
+    await openSheet(tester, path: kSamplePdfPath, name: 'sample.pdf');
 
     // It is an asset, not a file on disk: all three would fail.
     expect(find.text('Rename'), findsNothing);
@@ -175,10 +167,7 @@ void main() {
       findsOneWidget,
       reason: 'the confirmation must name the file being destroyed',
     );
-    expect(
-      find.textContaining('cannot be undone'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('cannot be undone'), findsOneWidget);
   });
 
   testWidgets('cancelling the Delete confirmation deletes nothing', (
@@ -210,10 +199,7 @@ void main() {
 
     // Proves the sheet is wired to the orchestration and surfaces its
     // result, rather than swallowing a failed delete silently.
-    expect(
-      find.text('That file is no longer on the device.'),
-      findsOneWidget,
-    );
+    expect(find.text('That file is no longer on the device.'), findsOneWidget);
   });
 
   testWidgets('a failed rename is reported rather than swallowed', (

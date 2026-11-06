@@ -26,10 +26,10 @@ dependencies:
   file_picker: ^12.0.0-beta.5
   permission_handler: ^12.0.1
   sqflite_common_ffi: ^2.3.3
-  google_fonts: ^8.1.0
   shared_preferences: ^2.5.5
   syncfusion_flutter_pdf: ^33.2.6
   share_plus: ^13.1.0
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:
@@ -62,23 +62,41 @@ flutter:
       fonts:
         - asset: assets/fonts/Fraunces-SemiBold.ttf
           weight: 600
+        - asset: assets/fonts/Fraunces-SemiBoldItalic.ttf
+          weight: 600
+          style: italic
+        - asset: assets/fonts/Fraunces-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Fraunces-BoldItalic.ttf
+          weight: 700
+          style: italic
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: branding/app_icon.png
+  min_sdk_android: 33
+  adaptive_icon_background: "#F7F8F4"
+  adaptive_icon_foreground: branding/app_icon_foreground.png
+  adaptive_icon_monochrome: branding/app_icon_monochrome.png
+  remove_alpha_ios: true
+  background_color_ios: "#F7F8F4"
 
 flutter_native_splash:
-  # Brand teal background — matches the Flutter SplashScreen widget.
-  color: "#0E6B72"
-  color_dark: "#073D42"
+  # Must match SplashScreen in lib/features/home/presentation/splash_screen.dart
+  # so the native and Flutter launch frames read as one screen.
+  color: "#1B5E4B"
+  color_dark: "#0F3D31"
 
-  # Centered logo drawn on the native splash.
-  image: assets/splash_logo.png
-  image_dark: assets/splash_logo.png
+  image: branding/splash_logo.png
+  image_dark: branding/splash_logo.png
 
   # Keep the native splash within the safe area so the status bar stays
   # visible — fullscreen hid the clock, battery and signal icons.
   fullscreen: false
 
   android_12:
-    # Android 12+ uses the new SplashScreen API — same brand teal.
-    color: "#0E6B72"
-    color_dark: "#073D42"
-    image: assets/splash_logo.png
-    image_dark: assets/splash_logo.png
+    color: "#1B5E4B"
+    color_dark: "#0F3D31"
+    image: assets/splash_icon.png
+    image_dark: assets/splash_icon.png

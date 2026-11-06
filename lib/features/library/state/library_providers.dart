@@ -109,13 +109,40 @@ class LibraryNotifier extends AsyncNotifier<List<LibraryEntry>> {
     await _persist();
   }
 
-  /// Toggles the favorite status of an entry.
-  Future<void> toggleFavorite(String id) async {
-    final updated = (state.value ?? []).map((e) {
-      return e.id == id ? e.copyWith(isFavorite: !e.isFavorite) : e;
-    }).toList();
-    state = AsyncData(updated);
+  /// Sets the favorite flag for every file in [paths].
+  ///
+  /// Idempotent. Waits for the initial load so an early call is not lost.
+  /// Favoriting a path with no library entry creates a root entry for it;
+  /// unfavoriting never removes an entry.
+  Future<void> setFavoriteForPaths(
+    Set<String> paths, {
+    required bool favorite,
+  }) async {
+    if (paths.isEmpty) return;
+    final loaded = await future;
+    final current = state.value ?? loaded;
+    bool needsChange(LibraryEntry e) =>
+        paths.contains(e.path) && e.isFavorite != favorite;
+    final existing = {for (final e in current) e.path};
+    final missing = favorite ? paths.difference(existing) : <String>{};
+    if (missing.isEmpty && !current.any(needsChange)) return;
+    final created = [for (final path in missing) await _newFavoriteEntry(path)];
+    state = AsyncData([
+      for (final e in current)
+        if (needsChange(e)) e.copyWith(isFavorite: favorite) else e,
+      ...created,
+    ]);
     await _persist();
+  }
+
+  Future<LibraryEntry> _newFavoriteEntry(String path) async {
+    return LibraryEntry(
+      id: uuid.v4(),
+      name: p.basename(path),
+      path: path,
+      status: await _fileChecker.checkFile(path),
+      isFavorite: true,
+    );
   }
 
   /// Renames a library entry (display name only; does not rename the file).
@@ -199,72 +226,6 @@ class LibraryNotifier extends AsyncNotifier<List<LibraryEntry>> {
 }
 
 // ---------------------------------------------------------------------------
-// Device files notifier — all PDFs found on device
-// ---------------------------------------------------------------------------
-
-/// Manages the list of all PDF files found on the device via storage scan.
-///
-/// Not persisted — re-scanned on each app start.
-class DeviceFilesNotifier extends AsyncNotifier<List<LibraryEntry>> {
-  late final FileChecker _fileChecker;
-  late final PdfScanner _scanner;
-
-  /// True when the last scan was blocked by a denied storage permission.
-  bool permissionDenied = false;
-
-  @override
-  Future<List<LibraryEntry>> build() async {
-    _fileChecker = ref.read(fileServiceProvider);
-    _scanner = ref.read(pdfScannerProvider);
-    return scan();
-  }
-
-  Future<List<LibraryEntry>> scan() async {
-    state = const AsyncLoading();
-    final paths = await _scanner.scanForPdfs();
-    permissionDenied =
-        paths.isEmpty && !await _scanner.checkPermission();
-    final entries = await Future.wait(
-      paths.map((path) async {
-        final status = await _fileChecker.checkFile(path);
-        return LibraryEntry(
-          id: path,
-          name: p.basename(path),
-          path: path,
-          status: status,
-        );
-      }),
-    );
-    state = AsyncData(entries);
-    return entries;
-  }
-
-  /// Repoints the scanned entry at [oldPath] to [newPath] in place.
-  ///
-  /// A full [scan] would also be correct, but the walk is capped at 5000
-  /// files and is the slowest thing on this tab, so a rename patches the one
-  /// row instead. The id is the path here, so it moves with it.
-  void applyRename({required String oldPath, required String newPath}) {
-    final current = state.value;
-    if (current == null) return;
-    state = AsyncData([
-      for (final e in current)
-        if (e.path == oldPath)
-          e.copyWith(id: newPath, path: newPath, name: p.basename(newPath))
-        else
-          e,
-    ]);
-  }
-
-  /// Drops the scanned entry for [path] after the file has been deleted.
-  void removePath(String path) {
-    final current = state.value;
-    if (current == null) return;
-    state = AsyncData(current.where((e) => e.path != path).toList());
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Collections notifier
 // ---------------------------------------------------------------------------
 
@@ -278,7 +239,10 @@ class CollectionsNotifier extends AsyncNotifier<List<PdfCollection>> {
   }
 
   Future<void> addCollection(String name) async {
-    final updated = <PdfCollection>[...(state.value ?? []), PdfCollection(id: uuid.v4(), name: name)];
+    final updated = <PdfCollection>[
+      ...(state.value ?? []),
+      PdfCollection(id: uuid.v4(), name: name),
+    ];
     state = AsyncData(updated);
     await _service.save(updated);
   }
@@ -319,10 +283,13 @@ final libraryEntriesProvider =
       LibraryNotifier.new,
     );
 
-final deviceFilesProvider =
-    AsyncNotifierProvider<DeviceFilesNotifier, List<LibraryEntry>>(
-      DeviceFilesNotifier.new,
-    );
+final favoritePathsProvider = Provider<Set<String>>((ref) {
+  final entries = ref.watch(libraryEntriesProvider).value ?? const [];
+  return {
+    for (final entry in entries)
+      if (entry.isFavorite) entry.path,
+  };
+});
 
 final collectionsProvider =
     AsyncNotifierProvider<CollectionsNotifier, List<PdfCollection>>(

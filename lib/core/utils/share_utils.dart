@@ -9,15 +9,13 @@ import 'package:share_plus/share_plus.dart';
 Future<void> sharePdf(BuildContext context, String path) async {
   if (!File(path).existsSync()) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('File not found.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('File not found.')));
     }
     return;
   }
-  await SharePlus.instance.share(
-    ShareParams(files: [XFile(path)]),
-  );
+  await SharePlus.instance.share(ShareParams(files: [XFile(path)]));
 }
 
 /// Shows a dialog to rename a PDF.
@@ -59,10 +57,7 @@ Future<String?> showRenameDialog(
           onPressed: () => Navigator.pop(ctx),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          onPressed: () => submit(ctx),
-          child: const Text('Rename'),
-        ),
+        FilledButton(onPressed: () => submit(ctx), child: const Text('Rename')),
       ],
     ),
   );

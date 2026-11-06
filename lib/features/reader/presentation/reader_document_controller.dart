@@ -1,95 +1,67 @@
-import 'dart:io';
 import 'dart:async';
+import 'dart:developer' as developer;
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pdfrx/pdfrx.dart';
+import 'package:pdfrx/pdfrx.dart' show PdfDocument;
 import 'package:syncfusion_flutter_pdf/pdf.dart' as sf_pdf;
 
-import 'package:sefer/core/theme/scroll_direction.dart';
+import 'package:sefer/features/reader/data/auxiliary_document_loader.dart';
+import 'package:sefer/features/reader/domain/auxiliary_document_status.dart';
 import 'package:sefer/features/reader/state/providers.dart';
 
-/// Owns the document load lifecycle: resume-page navigation, page tracking,
-/// and Syncfusion document construction (#24).
-///
-/// Callers must call [dispose] when the page is removed from the tree.
 class ReaderDocumentController {
   ReaderDocumentController({
     required this.pdfPath,
     required this.isAsset,
     required this.ref,
-    required this.pdfController,
+    required this.auxiliaryLoader,
     required this.onStateChanged,
   });
 
   final String pdfPath;
   final bool isAsset;
   final WidgetRef ref;
-  final PdfViewerController pdfController;
-
-  /// Called whenever [currentPage], [totalPages], or [sfDocument] changes.
+  final AuxiliaryDocumentLoader auxiliaryLoader;
   final VoidCallback onStateChanged;
 
-  int currentPage = 1;
-  int totalPages = 1;
   sf_pdf.PdfDocument? sfDocument;
+  AuxiliaryDocumentStatus auxiliaryStatus = AuxiliaryDocumentStatus.loading;
+  bool _disposed = false;
+  bool _auxiliaryLoadInFlight = false;
 
-  Future<void> onViewerReady(PdfDocument doc, BuildContext context) async {
-    final bundle = DefaultAssetBundle.of(context);
-    totalPages = doc.pages.length;
-    currentPage = pdfController.pageNumber ?? currentPage;
-    onStateChanged();
-
+  Future<void> onViewerReady(PdfDocument doc, AssetBundle bundle) async {
     await ref
         .read(readerNotifierProvider.notifier)
-        .onDocumentLoaded(pdfId: pdfPath, totalPages: totalPages);
+        .onDocumentLoaded(pdfId: pdfPath, totalPages: doc.pages.length);
+    if (_disposed) return;
 
-    final window =
-        ref.read(appSettingsProvider).scrollDirection ==
-            ScrollDirection.continuous
-        ? 3
-        : 1;
-    unawaited(
-      ref
-          .read(annotationNotifierProvider.notifier)
-          .loadForPage(pdfPath, currentPage, window: window),
-    );
-
-    unawaited(_loadSfDocument(bundle));
-  }
-
-  Future<void> _loadSfDocument(AssetBundle bundle) async {
-    try {
-      final Uint8List bytes;
-      if (isAsset) {
-        final data = await bundle.load(pdfPath);
-        bytes = data.buffer.asUint8List();
-      } else {
-        bytes = await File(pdfPath).readAsBytes();
-      }
-      final doc = await compute(
-        (Uint8List b) => sf_pdf.PdfDocument(inputBytes: b),
-        bytes,
-      );
-      sfDocument = doc;
-      onStateChanged();
-    } catch (_) {
-      // TOC / text extraction is best-effort — failure is non-fatal.
-    }
+    _loadAnnotationsAround(ref.read(readerNotifierProvider).currentPage);
+    unawaited(loadAuxiliaryDocument(bundle));
   }
 
   void onPageChanged(int page) {
-    currentPage = page;
-    onStateChanged();
-
+    if (_disposed) return;
     ref.read(readerNotifierProvider.notifier).onPageChanged(page);
+    _loadAnnotationsAround(ref.read(readerNotifierProvider).currentPage);
+  }
 
-    final window =
-        ref.read(appSettingsProvider).scrollDirection ==
-            ScrollDirection.continuous
-        ? 3
-        : 1;
+  void dispose() {
+    _disposed = true;
+    sfDocument?.dispose();
+  }
+
+  void releaseAuxiliaryDocument() {
+    sfDocument?.dispose();
+    sfDocument = null;
+    auxiliaryStatus = AuxiliaryDocumentStatus.loading;
+  }
+
+  void _loadAnnotationsAround(int page) {
+    final window = ref
+        .read(appSettingsProvider)
+        .layoutMode
+        .annotationPreloadWindow;
     unawaited(
       ref
           .read(annotationNotifierProvider.notifier)
@@ -97,7 +69,35 @@ class ReaderDocumentController {
     );
   }
 
-  void dispose() {
-    sfDocument?.dispose();
+  Future<void> loadAuxiliaryDocument(AssetBundle bundle) async {
+    if (_auxiliaryLoadInFlight || sfDocument != null) return;
+    _auxiliaryLoadInFlight = true;
+    auxiliaryStatus = AuxiliaryDocumentStatus.loading;
+    try {
+      final document = await auxiliaryLoader.load(
+        path: pdfPath,
+        isAsset: isAsset,
+        bundle: bundle,
+      );
+      if (_disposed) {
+        document.dispose();
+        return;
+      }
+      sfDocument = document;
+      auxiliaryStatus = AuxiliaryDocumentStatus.ready;
+    } catch (error, stack) {
+      developer.log(
+        'Loading auxiliary document failed for $pdfPath; '
+        'contents and text tools are unavailable',
+        name: 'sefer.reader',
+        level: 1000,
+        error: error,
+        stackTrace: stack,
+      );
+      auxiliaryStatus = AuxiliaryDocumentStatus.failed;
+    } finally {
+      _auxiliaryLoadInFlight = false;
+    }
+    if (!_disposed) onStateChanged();
   }
 }

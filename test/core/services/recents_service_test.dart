@@ -8,33 +8,35 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('moveEntry keeps position and timestamp, changes path and name',
-      () async {
-    final service = RecentsService();
-    await service.recordOpened('/a.pdf', 'A');
-    await service.recordOpened('/b.pdf', 'B');
-    await service.recordOpened('/c.pdf', 'C');
+  test(
+    'moveEntry keeps position and timestamp, changes path and name',
+    () async {
+      final service = RecentsService();
+      await service.recordOpened('/a.pdf', 'A');
+      await service.recordOpened('/b.pdf', 'B');
+      await service.recordOpened('/c.pdf', 'C');
 
-    final before = await service.load();
-    final target = before.firstWhere((e) => e.path == '/b.pdf');
-    final originalIndex = before.indexWhere((e) => e.path == '/b.pdf');
+      final before = await service.load();
+      final target = before.firstWhere((e) => e.path == '/b.pdf');
+      final originalIndex = before.indexWhere((e) => e.path == '/b.pdf');
 
-    await service.moveEntry(
-      oldPath: '/b.pdf',
-      newPath: '/renamed.pdf',
-      newName: 'Renamed',
-    );
+      await service.moveEntry(
+        oldPath: '/b.pdf',
+        newPath: '/renamed.pdf',
+        newName: 'Renamed',
+      );
 
-    final after = await service.load();
-    final movedIndex = after.indexWhere((e) => e.path == '/renamed.pdf');
-    final moved = after[movedIndex];
+      final after = await service.load();
+      final movedIndex = after.indexWhere((e) => e.path == '/renamed.pdf');
+      final moved = after[movedIndex];
 
-    expect(movedIndex, originalIndex, reason: 'position preserved');
-    expect(moved.name, 'Renamed');
-    expect(moved.openedAt, target.openedAt, reason: 'timestamp preserved');
-    expect(after.any((e) => e.path == '/b.pdf'), isFalse);
-    expect(after.length, before.length);
-  });
+      expect(movedIndex, originalIndex, reason: 'position preserved');
+      expect(moved.name, 'Renamed');
+      expect(moved.openedAt, target.openedAt, reason: 'timestamp preserved');
+      expect(after.any((e) => e.path == '/b.pdf'), isFalse);
+      expect(after.length, before.length);
+    },
+  );
 
   test('moveEntry is a no-op when the path is absent', () async {
     final service = RecentsService();

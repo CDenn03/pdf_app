@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pdfrx/pdfrx.dart';
 
 import 'package:sefer/core/theme/reading_mode.dart';
 import 'package:sefer/features/reader/presentation/reader_find_bar.dart';
-import 'package:sefer/features/reader/presentation/reader_search_controller.dart';
-
-void _noopPaint(Canvas canvas, Rect pageRect, PdfPage page) {}
+import 'package:sefer/features/reader/domain/reader_search_controller.dart';
+import 'package:sefer/features/reader/domain/search_excerpt.dart';
 
 class _FakeSearch extends ChangeNotifier implements ReaderSearchController {
   List<FindMatch> _matches = const [];
@@ -47,7 +45,16 @@ class _FakeSearch extends ChangeNotifier implements ReaderSearchController {
   }
 
   @override
-  PdfViewerPagePaintCallback get paintCallback => _noopPaint;
+  Future<void> goToNextMatch({required double chromeMargin}) => goToMatchAt(
+    (_currentIndex! + 1) % _matches.length,
+    chromeMargin: chromeMargin,
+  );
+
+  @override
+  Future<void> goToPreviousMatch({required double chromeMargin}) => goToMatchAt(
+    _currentIndex! <= 0 ? _matches.length - 1 : _currentIndex! - 1,
+    chromeMargin: chromeMargin,
+  );
 }
 
 Widget _host({
@@ -84,9 +91,18 @@ Widget _host({
 
 void main() {
   const matches = [
-    FindMatch(page: 2, snippet: 'first hit'),
-    FindMatch(page: 5, snippet: 'second hit'),
-    FindMatch(page: 9, snippet: 'third hit'),
+    FindMatch(page: 2, excerpt: SearchExcerpt.plain('first hit')),
+    FindMatch(page: 5, excerpt: SearchExcerpt.plain('second hit')),
+    FindMatch(
+      page: 9,
+      excerpt: SearchExcerpt(
+        before: 'The quick ',
+        match: 'third hit',
+        after: ' lands.',
+        hasLeadingEllipsis: true,
+        hasTrailingEllipsis: true,
+      ),
+    ),
   ];
 
   testWidgets('renders counter and prev/next/close controls', (tester) async {
@@ -138,8 +154,9 @@ void main() {
     expect(find.byType(ReaderFindBar), findsOneWidget);
   });
 
-  testWidgets('the active result row is styled differently from the others',
-      (tester) async {
+  testWidgets('the active result row is styled differently from the others', (
+    tester,
+  ) async {
     final search = _FakeSearch()..setResults(matches, current: 1);
     await tester.pumpWidget(
       _host(search: search, onClose: () {}, onViewerTap: () {}),
@@ -150,25 +167,61 @@ void main() {
     await tester.tap(find.byIcon(Icons.list));
     await tester.pump();
 
-    final active = tester.widget<ListTile>(
+    ListTile rowOf(String text) => tester.widget<ListTile>(
       find.ancestor(
-        of: find.text('second hit'),
+        of: find.textContaining(text, findRichText: true),
         matching: find.byType(ListTile),
       ),
     );
-    final inactive = tester.widget<ListTile>(
-      find.ancestor(
-        of: find.text('first hit'),
-        matching: find.byType(ListTile),
-      ),
-    );
-    expect(active.selected, isTrue);
-    expect(inactive.selected, isFalse);
+    expect(rowOf('second hit').selected, isTrue);
+    expect(rowOf('first hit').selected, isFalse);
+  });
 
-    final activeTitle = active.title! as Text;
-    final inactiveTitle = inactive.title! as Text;
-    expect(activeTitle.style!.fontWeight, FontWeight.w600);
-    expect(inactiveTitle.style!.fontWeight, FontWeight.w400);
+  testWidgets('excerpt spans style before, match and after distinctly', (
+    tester,
+  ) async {
+    final search = _FakeSearch()..setResults(matches, current: 0);
+    await tester.pumpWidget(
+      _host(search: search, onClose: () {}, onViewerTap: () {}),
+    );
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.list));
+    await tester.pump();
+
+    final rich = tester.widget<RichText>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText && widget.text.toPlainText().contains('quick'),
+      ),
+    );
+    final root = (rich.text as TextSpan).children!.single as TextSpan;
+    final spans = root.children!.cast<TextSpan>();
+    final byText = {for (final span in spans) span.text: span};
+
+    expect(byText['… '], isNotNull);
+    expect(byText[' …'], isNotNull);
+    expect(byText['third hit']!.style!.fontWeight, FontWeight.w600);
+    expect(byText['The quick ']!.style, isNull);
+    expect(root.style!.color, ReadingMode.light.secondaryText);
+    expect(byText['third hit']!.style!.color, isNot(root.style!.color));
+    expect(rich.maxLines, 2);
+  });
+
+  testWidgets('result row exposes one coherent semantic label', (tester) async {
+    final handle = tester.ensureSemantics();
+    final search = _FakeSearch()..setResults(matches, current: 0);
+    await tester.pumpWidget(
+      _host(search: search, onClose: () {}, onViewerTap: () {}),
+    );
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.list));
+    await tester.pump();
+
+    expect(
+      find.bySemanticsLabel('Page 9: … The quick third hit lands. …'),
+      findsOneWidget,
+    );
+    handle.dispose();
   });
 
   testWidgets('tapping a result row requests a jump to it', (tester) async {
@@ -180,7 +233,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.list));
     await tester.pump();
-    await tester.tap(find.text('third hit'));
+    await tester.tap(find.textContaining('third hit', findRichText: true));
     await tester.pump();
     expect(search.jumped, [2]);
   });

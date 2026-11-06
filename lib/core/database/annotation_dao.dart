@@ -112,11 +112,7 @@ class AnnotationDao {
         ''',
         whereArgs: [pdfId],
       );
-      await txn.delete(
-        'annotations',
-        where: 'pdf_id = ?',
-        whereArgs: [pdfId],
-      );
+      await txn.delete('annotations', where: 'pdf_id = ?', whereArgs: [pdfId]);
     });
   }
 
@@ -132,9 +128,7 @@ class AnnotationDao {
       'pdf_id': annotation.pdfId,
       'page': annotation.page,
       'type': annotation.type.name,
-      'rects': jsonEncode(
-        annotation.rects.map((r) => r.toJson()).toList(),
-      ),
+      'rects': jsonEncode(annotation.rects.map((r) => r.toJson()).toList()),
       'selected_text': annotation.selectedText,
       'text': annotation.text,
       'label': annotation.label,

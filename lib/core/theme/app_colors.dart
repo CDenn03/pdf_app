@@ -1,33 +1,37 @@
 import 'package:flutter/material.dart';
 
-/// Brand colour tokens — Combo 2: Teal leads, Forest grounds.
+/// Sefer brand palette: Teal #0F9D8E, Forest #1B5E4B, Ivory #F7F8F4,
+/// Slate #64746A.
 ///
-/// Primary interactive colour is Midnight Teal (#0E6B72).
-/// Forest Green (#1F5C38) appears in content surfaces (collection covers,
-/// file icon fills, progress) so it's everywhere but never shouts.
-/// Both are configurable here as the single source of truth.
+/// Forest carries interactive colour because white text on Teal is only
+/// 3.4:1, below WCAG AA for labels; Teal is the accent for fills and icons.
 abstract final class AppColors {
   // ── Brand ────────────────────────────────────────────────────────────────
   /// Primary interactive colour: buttons, active nav, links, focus rings.
-  static const brand = Color(0xFF0E6B72); // Midnight Teal
+  static const brand = Color(0xFF1B5E4B); // Forest
 
-  /// Ground accent: collection thumbnails, icon fills, progress bars.
-  static const ground = Color(0xFF1F5C38); // Forest Green
+  /// Accent: collection thumbnails, icon fills, progress bars.
+  static const ground = Color(0xFF0F9D8E); // Teal
 
   /// Light tint of [brand] — chip fills, selection backgrounds.
-  static const brandTint = Color(0xFFE2F4F5);
+  static const brandTint = Color(0xFFE3EFEA);
 
   /// Light tint of [ground] — secondary chip fills.
-  static const groundTint = Color(0xFFE8F5ED);
+  static const groundTint = Color(0xFFE0F4F1);
 
   /// On-brand text (white on teal/forest buttons).
   static const onBrand = Color(0xFFFFFFFF);
 
+  // ── Launch ────────────────────────────────────────────────────────────────
+  // Keep in sync with flutter_native_splash colours in pubspec.yaml.
+  static const splashLight = Color(0xFF1B5E4B);
+  static const splashDark = Color(0xFF0F3D31);
+
   // ── Light mode surfaces ───────────────────────────────────────────────────
-  static const lightBackground = Color(0xFFF5F4F0);
+  static const lightBackground = Color(0xFFF7F8F4); // Ivory
   static const lightSurface = Color(0xFFFFFFFF);
-  static const lightPrimaryText = Color(0xFF1C1C1C);
-  static const lightSecondaryText = Color(0xFF6B6B6B);
+  static const lightPrimaryText = Color(0xFF1C2420);
+  static const lightSecondaryText = Color(0xFF64746A); // Slate
   static const lightDivider = Color(0xFFE5E5E5);
 
   // ── Dark mode surfaces ────────────────────────────────────────────────────
@@ -71,10 +75,10 @@ abstract final class AppColors {
   // ── Collection cover gradients ────────────────────────────────────────────
   /// Gradient presets cycled for auto-coloured collection/file thumbnails.
   static const List<List<Color>> coverGradients = [
-    [Color(0xFF0E6B72), Color(0xFF073D42)], // teal
-    [Color(0xFF1F5C38), Color(0xFF0D3320)], // forest
-    [Color(0xFF2C7A7B), Color(0xFF1A5252)], // teal-mid
-    [Color(0xFF276749), Color(0xFF134429)], // forest-mid
+    [Color(0xFF1B5E4B), Color(0xFF0F3D31)], // forest
+    [Color(0xFF0F9D8E), Color(0xFF0A6E63)], // teal
+    [Color(0xFF2C7A6B), Color(0xFF1A5248)], // forest-teal
+    [Color(0xFF64746A), Color(0xFF414D46)], // slate
     [Color(0xFF0A4D6B), Color(0xFF062E41)], // ocean
     [Color(0xFF5C4A2E), Color(0xFF3A2C18)], // earth
   ];

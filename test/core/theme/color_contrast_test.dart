@@ -35,31 +35,55 @@ void main() {
     }
 
     test('light secondary text', () {
-      expectAa('light secondary on background',
-          AppColors.lightSecondaryText, AppColors.lightBackground);
-      expectAa('light secondary on surface',
-          AppColors.lightSecondaryText, AppColors.lightSurface);
+      expectAa(
+        'light secondary on background',
+        AppColors.lightSecondaryText,
+        AppColors.lightBackground,
+      );
+      expectAa(
+        'light secondary on surface',
+        AppColors.lightSecondaryText,
+        AppColors.lightSurface,
+      );
     });
 
     test('light primary text', () {
-      expectAa('light primary on background',
-          AppColors.lightPrimaryText, AppColors.lightBackground);
-      expectAa('light primary on surface',
-          AppColors.lightPrimaryText, AppColors.lightSurface);
+      expectAa(
+        'light primary on background',
+        AppColors.lightPrimaryText,
+        AppColors.lightBackground,
+      );
+      expectAa(
+        'light primary on surface',
+        AppColors.lightPrimaryText,
+        AppColors.lightSurface,
+      );
     });
 
     test('dark secondary text', () {
-      expectAa('dark secondary on background',
-          AppColors.darkSecondaryText, AppColors.darkBackground);
-      expectAa('dark secondary on surface',
-          AppColors.darkSecondaryText, AppColors.darkSurface);
+      expectAa(
+        'dark secondary on background',
+        AppColors.darkSecondaryText,
+        AppColors.darkBackground,
+      );
+      expectAa(
+        'dark secondary on surface',
+        AppColors.darkSecondaryText,
+        AppColors.darkSurface,
+      );
     });
 
     test('dark primary text', () {
-      expectAa('dark primary on background',
-          AppColors.darkPrimaryText, AppColors.darkBackground);
-      expectAa('dark primary on surface',
-          AppColors.darkPrimaryText, AppColors.darkSurface);
+      expectAa(
+        'dark primary on background',
+        AppColors.darkPrimaryText,
+        AppColors.darkBackground,
+      );
+      expectAa(
+        'dark primary on surface',
+        AppColors.darkPrimaryText,
+        AppColors.darkSurface,
+      );
     });
   });
 }

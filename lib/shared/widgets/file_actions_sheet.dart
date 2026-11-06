@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:sefer/features/reader/domain/reader_route_arguments.dart';
 import 'package:sefer/core/models/file_status.dart';
 import 'package:sefer/core/utils/share_utils.dart';
 import 'package:sefer/features/library/state/document_actions.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
-import 'package:sefer/features/recents/state/recents_notifier.dart';
 
 /// Long-press action menu shared by every file list surface.
 ///
@@ -67,9 +67,7 @@ Future<void> showFileActionsSheet(
   }
 
   void open() {
-    ref.read(libraryEntriesProvider.notifier).recordOpened(path);
-    ref.read(recentsProvider.notifier).recordOpened(path);
-    context.push('/reader', extra: path);
+    context.push('/reader', extra: ReaderRouteArguments(path: path));
   }
 
   return showModalBottomSheet<void>(
@@ -114,7 +112,9 @@ Future<void> showFileActionsSheet(
                     path: path,
                     newName: newName,
                   );
-                  report(result, 'Renamed.');
+                  messenger.showSnackBar(
+                    SnackBar(content: Text(result.userMessage)),
+                  );
                 },
               ),
             if (removeFromCollectionId != null && libraryEntryId != null)

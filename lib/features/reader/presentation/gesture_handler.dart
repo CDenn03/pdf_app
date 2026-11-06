@@ -2,7 +2,8 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart' show PdfDocument, PdfTextExtractor;
+import 'package:syncfusion_flutter_pdf/pdf.dart'
+    show PdfDocument, PdfTextExtractor;
 
 import 'package:sefer/core/models/annotation_color.dart';
 import 'package:sefer/core/models/relative_rect_model.dart';
@@ -75,13 +76,15 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
       if (dragRect.width > 10 && dragRect.height > 4) {
         final (rects, text) = _extractWordRectsAndText(dragRect);
         if (rects.isNotEmpty) {
-          ref.read(annotationNotifierProvider.notifier).addHighlight(
-            rects: rects,
-            page: widget.currentPage,
-            pdfId: widget.pdfId,
-            color: _activeColor,
-            selectedText: text,
-          );
+          ref
+              .read(annotationNotifierProvider.notifier)
+              .addHighlight(
+                rects: rects,
+                page: widget.currentPage,
+                pdfId: widget.pdfId,
+                color: _activeColor,
+                selectedText: text,
+              );
         }
       }
     }
@@ -124,7 +127,8 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
       for (final line in lines) {
         for (final word in line.wordCollection) {
           final b = word.bounds;
-          final overlaps = b.left < pdfRight &&
+          final overlaps =
+              b.left < pdfRight &&
               b.left + b.width > pdfLeft &&
               b.top < pdfBottom &&
               b.top + b.height > pdfTop;
@@ -178,13 +182,15 @@ class _GestureHandlerState extends ConsumerState<GestureHandler> {
       bottom: (position.dy / widget.pageSize.height).clamp(0.0, 1.0),
     );
 
-    await ref.read(annotationNotifierProvider.notifier).addNote(
-      edgePosition: edgePosition,
-      initialText: text,
-      page: widget.currentPage,
-      pdfId: widget.pdfId,
-      color: _activeColor,
-    );
+    await ref
+        .read(annotationNotifierProvider.notifier)
+        .addNote(
+          edgePosition: edgePosition,
+          initialText: text,
+          page: widget.currentPage,
+          pdfId: widget.pdfId,
+          color: _activeColor,
+        );
   }
 
   Future<void> _addBookmark() async {

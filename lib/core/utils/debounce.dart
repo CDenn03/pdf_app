@@ -11,6 +11,7 @@ import 'dart:ui';
 class Debounce {
   final Duration duration;
   Timer? _timer;
+  VoidCallback? _pending;
 
   Debounce({this.duration = const Duration(milliseconds: 300)});
 
@@ -18,12 +19,24 @@ class Debounce {
   /// before the timer fires, the previous call is cancelled.
   void run(VoidCallback action) {
     _timer?.cancel();
-    _timer = Timer(duration, action);
+    _pending = action;
+    _timer = Timer(duration, () {
+      _pending = null;
+      action();
+    });
+  }
+
+  /// Runs the pending action immediately, if any, and cancels its timer.
+  void flush() {
+    final action = _pending;
+    dispose();
+    action?.call();
   }
 
   /// Cancels any pending debounced action and releases the timer.
   void dispose() {
     _timer?.cancel();
     _timer = null;
+    _pending = null;
   }
 }

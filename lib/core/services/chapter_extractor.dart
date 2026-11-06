@@ -89,7 +89,9 @@ class ChapterExtractor {
           final idx = document.pages.indexOf(dest.page);
           if (idx >= 0) page = idx + 1;
         }
-        result.add(DetectedChapter(title: bm.title.trim(), page: page, depth: 0));
+        result.add(
+          DetectedChapter(title: bm.title.trim(), page: page, depth: 0),
+        );
       }
       return result;
     } catch (_) {
@@ -178,10 +180,12 @@ class ChapterExtractor {
       final cur = raw[i];
       if (labelOnly.hasMatch(cur.title) && i + 1 < raw.length) {
         final next = raw[i + 1];
-        result.add(_RawTocEntry(
-          title: '${cur.title} ${next.title}'.trim(),
-          page: next.page,
-        ));
+        result.add(
+          _RawTocEntry(
+            title: '${cur.title} ${next.title}'.trim(),
+            page: next.page,
+          ),
+        );
         i += 2;
       } else {
         result.add(cur);
@@ -279,11 +283,12 @@ class ChapterExtractor {
 
     if (filtered.isEmpty) return [];
 
-    final sizes = filtered
-        .where((l) => l.fontSize > 0)
-        .map<double>((l) => l.fontSize)
-        .toList()
-      ..sort();
+    final sizes =
+        filtered
+            .where((l) => l.fontSize > 0)
+            .map<double>((l) => l.fontSize)
+            .toList()
+          ..sort();
     if (sizes.isEmpty) return [];
 
     final median = sizes[sizes.length ~/ 2];
@@ -315,19 +320,23 @@ class ChapterExtractor {
       }
       if (isKeyword && !isLargeFont) depth = 0;
 
-      candidates.add(_Candidate(
-        text: text,
-        page: line.pageIndex + 1,
-        depth: depth,
-        fontSize: line.fontSize,
-      ));
+      candidates.add(
+        _Candidate(
+          text: text,
+          page: line.pageIndex + 1,
+          depth: depth,
+          fontSize: line.fontSize,
+        ),
+      );
     }
 
     final deduped = _dedupe(candidates);
     final merged = _mergeMultiLineHeadings(deduped);
 
     return merged
-        .map((c) => DetectedChapter(title: c.text, page: c.page, depth: c.depth))
+        .map(
+          (c) => DetectedChapter(title: c.text, page: c.page, depth: c.depth),
+        )
         .toList();
   }
 
@@ -361,8 +370,12 @@ class ChapterExtractor {
     if (RegExp(
       r'^(chapter|part|section|unit|lesson|module|topic)\s+\d+',
       caseSensitive: false,
-    ).hasMatch(text)) { return true; }
-    if (RegExp(r'^\d+(\.\d+)*\s+[A-Z]').hasMatch(text)) { return true; }
+    ).hasMatch(text)) {
+      return true;
+    }
+    if (RegExp(r'^\d+(\.\d+)*\s+[A-Z]').hasMatch(text)) {
+      return true;
+    }
     return false;
   }
 
@@ -371,7 +384,9 @@ class ChapterExtractor {
     for (final item in input) {
       if (result.isNotEmpty &&
           result.last.text == item.text &&
-          result.last.page == item.page) { continue; }
+          result.last.page == item.page) {
+        continue;
+      }
       result.add(item);
     }
     return result;
@@ -389,14 +404,18 @@ class ChapterExtractor {
         final sameDepth = cur.depth == next.depth;
         final similarSize = (cur.fontSize - next.fontSize).abs() < 0.5;
         final merged = '${cur.text} ${next.text}';
-        if (samePage && sameDepth && similarSize &&
+        if (samePage &&
+            sameDepth &&
+            similarSize &&
             merged.length <= _maxHeadingLength) {
-          result.add(_Candidate(
-            text: merged,
-            page: cur.page,
-            depth: cur.depth,
-            fontSize: cur.fontSize,
-          ));
+          result.add(
+            _Candidate(
+              text: merged,
+              page: cur.page,
+              depth: cur.depth,
+              fontSize: cur.fontSize,
+            ),
+          );
           i += 2;
           continue;
         }

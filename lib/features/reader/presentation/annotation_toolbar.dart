@@ -51,71 +51,69 @@ class AnnotationToolbar extends ConsumerWidget {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
-            children: [
-              // Tool buttons — each gets equal space, text truncates if needed.
-              Expanded(
-                child: _ToolButton(
-                  icon: Icons.highlight,
-                  label: 'Highlight',
-                  selected: activeTool == AnnotationTool.highlight,
-                  color: readingMode.primaryText,
-                  onTap: () => onToolChanged(AnnotationTool.highlight),
-                ),
-              ),
-              Expanded(
-                child: _ToolButton(
-                  icon: Icons.sticky_note_2_outlined,
-                  label: 'Note',
-                  selected: activeTool == AnnotationTool.note,
-                  color: readingMode.primaryText,
-                  onTap: () => onToolChanged(AnnotationTool.note),
-                ),
-              ),
-              Expanded(
-                child: _ToolButton(
-                  icon: Icons.bookmark_outline,
-                  label: 'Bookmark',
-                  selected: activeTool == AnnotationTool.bookmark,
-                  color: readingMode.primaryText,
-                  onTap: () => onToolChanged(AnnotationTool.bookmark),
-                ),
-              ),
-              // Color picker — for all tools, fixed width.
-              _ColorPicker(
-                activeColor: activeColor,
-                onColorSelected: (color) {
-                  ref
-                      .read(activeAnnotationColorProvider.notifier)
-                      .setValue(color);
-                },
-              ),
-              // Undo + Done — fixed width.
-              IconButton(
-                icon: Icon(
-                  Icons.undo,
-                  size: 20,
-                  color: canUndo
-                      ? readingMode.primaryText
-                      : readingMode.primaryText.withValues(alpha: 0.3),
-                ),
-                tooltip: 'Undo',
-                onPressed: canUndo ? onUndo : null,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                padding: EdgeInsets.zero,
-              ),
-              TextButton(
-                onPressed: onExit,
-                style: TextButton.styleFrom(
-                  foregroundColor: readingMode.primaryText,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(48, 36),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text('Done', style: TextStyle(fontSize: 13)),
-              ),
-            ],
+        children: [
+          // Tool buttons — each gets equal space, text truncates if needed.
+          Expanded(
+            child: _ToolButton(
+              icon: Icons.highlight,
+              label: 'Highlight',
+              selected: activeTool == AnnotationTool.highlight,
+              color: readingMode.primaryText,
+              onTap: () => onToolChanged(AnnotationTool.highlight),
+            ),
           ),
-        );
+          Expanded(
+            child: _ToolButton(
+              icon: Icons.sticky_note_2_outlined,
+              label: 'Note',
+              selected: activeTool == AnnotationTool.note,
+              color: readingMode.primaryText,
+              onTap: () => onToolChanged(AnnotationTool.note),
+            ),
+          ),
+          Expanded(
+            child: _ToolButton(
+              icon: Icons.bookmark_outline,
+              label: 'Bookmark',
+              selected: activeTool == AnnotationTool.bookmark,
+              color: readingMode.primaryText,
+              onTap: () => onToolChanged(AnnotationTool.bookmark),
+            ),
+          ),
+          // Color picker — for all tools, fixed width.
+          _ColorPicker(
+            activeColor: activeColor,
+            onColorSelected: (color) {
+              ref.read(activeAnnotationColorProvider.notifier).setValue(color);
+            },
+          ),
+          // Undo + Done — fixed width.
+          IconButton(
+            icon: Icon(
+              Icons.undo,
+              size: 20,
+              color: canUndo
+                  ? readingMode.primaryText
+                  : readingMode.primaryText.withValues(alpha: 0.3),
+            ),
+            tooltip: 'Undo',
+            onPressed: canUndo ? onUndo : null,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            padding: EdgeInsets.zero,
+          ),
+          TextButton(
+            onPressed: onExit,
+            style: TextButton.styleFrom(
+              foregroundColor: readingMode.primaryText,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(48, 36),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Done', style: TextStyle(fontSize: 13)),
+          ),
+        ],
+      ),
+    );
   }
 }
 

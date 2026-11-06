@@ -4,11 +4,19 @@ import 'package:sefer/core/database/annotation_dao.dart';
 import 'package:sefer/core/services/reading_progress_service.dart';
 import 'package:sefer/core/services/recents_service.dart';
 
+class KeyMigrationFailure {
+  const KeyMigrationFailure(this.store, this.error);
+
+  final String store;
+  final Object error;
+}
+
 /// Moves or erases every piece of per-document state that keys off the file
 /// path: annotations (and their note entries), reading progress, and recents.
 abstract class DocumentKeyStore {
-  /// Moves every piece of per-document state from [oldPath] to [newPath].
-  Future<void> moveDocument({
+  /// Moves every piece of per-document state from [oldPath] to [newPath],
+  /// returning the stores that could not be moved.
+  Future<List<KeyMigrationFailure>> moveDocument({
     required String oldPath,
     required String newPath,
     required String newName,
@@ -24,8 +32,8 @@ abstract class DocumentKeyStore {
 /// callers are a rename and a delete, where a half-migrated document — rows
 /// still keyed to a path that no longer exists — is the worst outcome. Each
 /// store is attempted regardless of whether an earlier one threw, so a single
-/// failure cannot leave the other two stores stranded; the first error is
-/// logged and swallowed. The progress and recents stores never throw by
+/// failure cannot leave the other two stores stranded; failures are
+/// logged and reported to the caller. The progress and recents stores never throw by
 /// contract, so in practice only the annotation DAO can fail here.
 class DocumentKeyService implements DocumentKeyStore {
   DocumentKeyService({
@@ -41,39 +49,41 @@ class DocumentKeyService implements DocumentKeyStore {
   final RecentsStore _recents;
 
   @override
-  Future<void> moveDocument({
+  Future<List<KeyMigrationFailure>> moveDocument({
     required String oldPath,
     required String newPath,
     required String newName,
-  }) async {
-    await _runAll('moveDocument', [
-      () => _annotationDao.reassignPdfId(oldPath, newPath),
-      () => _progress.movePage(oldPath, newPath),
-      () => _recents.moveEntry(
+  }) {
+    return _runAll('moveDocument', {
+      'annotations': () => _annotationDao.reassignPdfId(oldPath, newPath),
+      'reading progress': () => _progress.movePage(oldPath, newPath),
+      'recents': () => _recents.moveEntry(
         oldPath: oldPath,
         newPath: newPath,
         newName: newName,
       ),
-    ]);
+    });
   }
 
   @override
   Future<void> purgeDocument(String path) async {
-    await _runAll('purgeDocument', [
-      () => _annotationDao.purgeForPdf(path),
-      () => _progress.clear(path),
-      () => _recents.remove(path),
-    ]);
+    await _runAll('purgeDocument', {
+      'annotations': () => _annotationDao.purgeForPdf(path),
+      'reading progress': () => _progress.clear(path),
+      'recents': () => _recents.remove(path),
+    });
   }
 
-  Future<void> _runAll(
+  Future<List<KeyMigrationFailure>> _runAll(
     String operation,
-    List<Future<void> Function()> steps,
+    Map<String, Future<void> Function()> steps,
   ) async {
-    for (final step in steps) {
+    final failures = <KeyMigrationFailure>[];
+    for (final MapEntry(key: store, value: step) in steps.entries) {
       try {
         await step();
       } catch (e, s) {
+        failures.add(KeyMigrationFailure(store, e));
         developer.log(
           '$operation step failed; continuing with remaining stores',
           name: 'sefer.documentKeys',
@@ -83,5 +93,6 @@ class DocumentKeyService implements DocumentKeyStore {
         );
       }
     }
+    return failures;
   }
 }

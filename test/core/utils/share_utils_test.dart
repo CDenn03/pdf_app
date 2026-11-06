@@ -88,7 +88,10 @@ void main() {
       await tester.tap(find.text('go'));
       await tester.pumpAndSettle();
 
-      seeded = tester.widget<TextField>(find.byType(TextField)).controller!.text;
+      seeded = tester
+          .widget<TextField>(find.byType(TextField))
+          .controller!
+          .text;
       expect(seeded, 'report.pdf.backup');
     });
 
@@ -98,10 +101,8 @@ void main() {
           home: Scaffold(
             body: Builder(
               builder: (context) => ElevatedButton(
-                onPressed: () => showRenameDialog(
-                  context,
-                  currentName: 'SCAN.PDF',
-                ),
+                onPressed: () =>
+                    showRenameDialog(context, currentName: 'SCAN.PDF'),
                 child: const Text('go'),
               ),
             ),
@@ -158,10 +159,8 @@ void main() {
           home: Scaffold(
             body: Builder(
               builder: (context) => ElevatedButton(
-                onPressed: () => showRenameDialog(
-                  context,
-                  currentName: 'Untitled',
-                ),
+                onPressed: () =>
+                    showRenameDialog(context, currentName: 'Untitled'),
                 child: const Text('go'),
               ),
             ),

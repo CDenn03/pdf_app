@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:sefer/features/reader/domain/reader_route_arguments.dart';
 import 'package:sefer/core/models/file_status.dart';
 import 'package:sefer/core/theme/app_colors.dart';
 import 'package:sefer/features/library/state/library_entry.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
-import 'package:sefer/features/recents/state/recents_notifier.dart';
 import 'package:sefer/shared/widgets/file_actions_sheet.dart';
 import 'package:sefer/shared/widgets/file_list_tile.dart';
 
@@ -54,8 +54,6 @@ class LibraryEntryTile extends ConsumerWidget {
   }
 
   void _open(BuildContext context, WidgetRef ref) {
-    ref.read(libraryEntriesProvider.notifier).recordOpened(entry.path);
-    ref.read(recentsProvider.notifier).recordOpened(entry.path);
-    context.push('/reader', extra: entry.path);
+    context.push('/reader', extra: ReaderRouteArguments(path: entry.path));
   }
 }

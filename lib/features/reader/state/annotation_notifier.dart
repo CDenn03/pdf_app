@@ -21,13 +21,14 @@ import 'package:sefer/core/providers.dart';
 ///
 /// Loads annotations for a window of pages around the current page.
 /// In continuous mode callers pass a larger [window] to cover all visible pages.
-class AnnotationNotifier
-    extends Notifier<Map<int, List<Annotation>>> {
+class AnnotationNotifier extends Notifier<Map<int, List<Annotation>>> {
   late final AnnotationDao _dao;
   late final NoteEntryDao _noteEntryDao;
 
   String _currentPdfId = '';
+  int _latestLoadRequest = 0;
   final _undoStack = <String>[];
+  final _pendingWrites = <Future<void>>{};
   static const _maxUndoDepth = 20;
 
   bool get canUndo => _undoStack.isNotEmpty;
@@ -46,11 +47,13 @@ class AnnotationNotifier
       _syncCanUndo();
     }
     _currentPdfId = pdfId;
+    final request = ++_latestLoadRequest;
 
     final startPage = max(1, page - window);
     final endPage = page + window;
 
     final list = await _dao.getByPdfAndPageRange(pdfId, startPage, endPage);
+    if (!ref.mounted || request != _latestLoadRequest) return;
     state = _mergeIntoState(state, list, startPage, endPage);
   }
 
@@ -111,21 +114,30 @@ class AnnotationNotifier
     if (_undoStack.length > _maxUndoDepth) _undoStack.removeAt(0);
     _syncCanUndo();
 
-    // Persist annotation first, then the note entry so the FK is satisfied.
-    await _saveAsync(annotation);
-    developer.log(
-      'addNote: saved annotation id=${annotation.id} pdfId=${annotation.pdfId} page=${annotation.page}',
-      name: 'sefer.annotation',
-    );
-    await _saveNoteEntry(
-      NoteEntry(
-        id: uuid.v4(),
-        annotationId: annotation.id,
-        text: initialText,
-        createdAt: DateTime.now(),
-      ),
-      annotation.id,
-    );
+    // The note entry has a FK on the annotation row, so order matters.
+    await _track(() async {
+      await _saveAsync(annotation);
+      await _saveNoteEntry(
+        NoteEntry(
+          id: uuid.v4(),
+          annotationId: annotation.id,
+          text: initialText,
+          createdAt: DateTime.now(),
+        ),
+        annotation.id,
+      );
+    }());
+  }
+
+  Future<void> flushWrites() async {
+    while (_pendingWrites.isNotEmpty) {
+      await Future.wait(_pendingWrites.toList());
+    }
+  }
+
+  Future<void> _track(Future<void> write) {
+    _pendingWrites.add(write);
+    return write.whenComplete(() => _pendingWrites.remove(write));
   }
 
   Future<void> _saveNoteEntry(NoteEntry entry, String annotationId) async {
@@ -322,9 +334,9 @@ class AnnotationNotifier
     ref.read(canUndoAnnotationProvider.notifier).setValue(canUndo);
   }
 
-  // Declared Future<void> so errors propagate; called with unawaited() to
-  // make the fire-and-forget intent explicit and avoid mixed async styles (#23).
-  Future<void> _saveAsync(Annotation annotation) async {
+  Future<void> _saveAsync(Annotation annotation) => _track(_upsert(annotation));
+
+  Future<void> _upsert(Annotation annotation) async {
     try {
       await _dao.upsert(annotation);
     } catch (e, s) {

@@ -20,10 +20,16 @@ void main() {
     expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
   });
 
-  testWidgets('unavailable shows unavailable label, hides subtitle', (tester) async {
+  testWidgets('unavailable shows unavailable label, hides subtitle', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _host(
-        const FileListTile(title: 'Gone.pdf', subtitle: 'Favorite', unavailable: true),
+        const FileListTile(
+          title: 'Gone.pdf',
+          subtitle: 'Favorite',
+          unavailable: true,
+        ),
       ),
     );
     expect(find.text('File unavailable'), findsOneWidget);

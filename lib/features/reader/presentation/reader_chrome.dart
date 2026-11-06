@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import 'package:sefer/core/theme/app_spacing.dart';
 import 'package:sefer/core/theme/reading_mode.dart';
+import 'package:sefer/features/reader/presentation/reader_favorite_button.dart';
 
 class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
   const ReaderAppBar({
     super.key,
     required this.title,
     required this.isBookmarked,
+    required this.documentPath,
     required this.onBack,
     required this.onBookmark,
     required this.readingMode,
@@ -15,6 +17,7 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   final String title;
   final bool isBookmarked;
+  final String documentPath;
   final VoidCallback onBack;
   final VoidCallback onBookmark;
   final ReadingMode readingMode;
@@ -40,6 +43,10 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       title: Text(title, overflow: TextOverflow.ellipsis, style: titleStyle),
       actions: [
+        ReaderFavoriteButton(
+          documentPath: documentPath,
+          readingMode: readingMode,
+        ),
         IconButton(
           icon: Icon(
             isBookmarked ? Icons.bookmark : Icons.bookmark_outline,
@@ -225,119 +232,6 @@ class ReadingModeFilter extends StatelessWidget {
   };
 }
 
-/// A thin scrollbar on the right edge that only activates after a long press,
-/// so regular taps on note markers beneath it are unaffected.
-class SideScrollThumb extends StatefulWidget {
-  const SideScrollThumb({
-    super.key,
-    required this.currentPage,
-    required this.totalPages,
-    required this.onPageRequested,
-  });
-
-  final int currentPage;
-  final int totalPages;
-  final void Function(int page) onPageRequested;
-
-  @override
-  State<SideScrollThumb> createState() => _SideScrollThumbState();
-}
-
-class _SideScrollThumbState extends State<SideScrollThumb> {
-  bool _active = false;
-  double _dragFraction = 0;
-
-  double get _fraction => _active
-      ? _dragFraction
-      : (widget.currentPage - 1) /
-            (widget.totalPages - 1).clamp(1, double.infinity);
-
-  int _pageFromFraction(double f) =>
-      ((f * (widget.totalPages - 1)).round() + 1).clamp(1, widget.totalPages);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final trackHeight = constraints.maxHeight;
-        final thumbH = (trackHeight / widget.totalPages).clamp(32.0, 80.0);
-        final maxTop = trackHeight - thumbH;
-        final top = (_fraction * maxTop).clamp(0.0, maxTop);
-
-        return Semantics(
-          label: 'Scroll position',
-          slider: true,
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onLongPressStart: (d) {
-              final f = (d.localPosition.dy / trackHeight).clamp(0.0, 1.0);
-              setState(() {
-                _active = true;
-                _dragFraction = f;
-              });
-              widget.onPageRequested(_pageFromFraction(f));
-            },
-            onLongPressMoveUpdate: (d) {
-              if (!_active) return;
-              final f = (d.localPosition.dy / trackHeight).clamp(0.0, 1.0);
-              setState(() => _dragFraction = f);
-              widget.onPageRequested(_pageFromFraction(f));
-            },
-            onLongPressEnd: (_) => setState(() => _active = false),
-            onLongPressCancel: () => setState(() => _active = false),
-            child: SizedBox(
-              width: _active ? 48 : 20,
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 3,
-                      color: theme.colorScheme.outline.withValues(
-                        alpha: _active ? 0.3 : 0.15,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: 0,
-                    top: top,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      width: _active ? 44 : 4,
-                      height: thumbH,
-                      decoration: BoxDecoration(
-                        color: _active
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.outline.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(_active ? 8 : 2),
-                      ),
-                      alignment: Alignment.center,
-                      child: _active
-                          ? Text(
-                              '${_pageFromFraction(_dragFraction)}',
-                              style: TextStyle(
-                                color: theme.colorScheme.onPrimary,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
 class PageIndicator extends StatelessWidget {
   const PageIndicator({
     super.key,
@@ -379,11 +273,13 @@ class ReaderMoreMenu extends StatelessWidget {
     required this.onAnnotations,
     required this.onReadingMode,
     required this.onShare,
+    this.onRename,
   });
 
   final VoidCallback onAnnotations;
   final VoidCallback onReadingMode;
   final VoidCallback onShare;
+  final VoidCallback? onRename;
 
   @override
   Widget build(BuildContext context) {
@@ -407,6 +303,12 @@ class ReaderMoreMenu extends StatelessWidget {
             title: Text('Share', style: theme.textTheme.bodyMedium),
             onTap: onShare,
           ),
+          if (onRename != null)
+            ListTile(
+              leading: const Icon(Icons.drive_file_rename_outline),
+              title: Text('Rename', style: theme.textTheme.bodyMedium),
+              onTap: onRename,
+            ),
           const SizedBox(height: 8),
         ],
       ),

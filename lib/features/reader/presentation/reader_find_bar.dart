@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'package:sefer/core/theme/reading_mode.dart';
-import 'package:sefer/features/reader/presentation/reader_search_controller.dart';
+import 'package:sefer/features/reader/domain/reader_search_controller.dart';
+import 'package:sefer/features/reader/domain/search_excerpt.dart';
 
 /// Browser-style find bar docked under the app bar.
 ///
-/// Non-modal: the viewer stays fully interactive while it is open. It drives
-/// its own match jumps with a margin large enough to clear the find chrome,
-/// since pdfrx's own `goToMatch` centres a match with a flat margin and knows
-/// nothing about this bar.
+/// Non-modal: the viewer stays fully interactive while it is open. Match jumps
+/// carry a margin large enough to clear this bar.
 class ReaderFindBar extends StatefulWidget {
   const ReaderFindBar({
     super.key,
@@ -66,17 +65,11 @@ class _ReaderFindBarState extends State<ReaderFindBar> {
   Future<void> _jumpTo(int index) =>
       widget.search.goToMatchAt(index, chromeMargin: _jumpMargin);
 
-  Future<void> _previous() async {
-    if (_matchCount == 0) return;
-    final next = _currentIndex <= 0 ? _matchCount - 1 : _currentIndex - 1;
-    await _jumpTo(next);
-  }
+  Future<void> _previous() =>
+      widget.search.goToPreviousMatch(chromeMargin: _jumpMargin);
 
-  Future<void> _next() async {
-    if (_matchCount == 0) return;
-    final next = (_currentIndex + 1) % _matchCount;
-    await _jumpTo(next);
-  }
+  Future<void> _next() =>
+      widget.search.goToNextMatch(chromeMargin: _jumpMargin);
 
   @override
   Widget build(BuildContext context) {
@@ -111,8 +104,11 @@ class _ReaderFindBarState extends State<ReaderFindBar> {
                       decoration: InputDecoration(
                         isDense: true,
                         hintText: 'Find in document',
-                        prefixIcon:
-                            Icon(Icons.search, size: 20, color: onSurface),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          size: 20,
+                          color: onSurface,
+                        ),
                         border: const OutlineInputBorder(),
                       ),
                       onChanged: _search,
@@ -122,10 +118,9 @@ class _ReaderFindBarState extends State<ReaderFindBar> {
                   const SizedBox(width: 8),
                   Text(
                     counter,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: onSurface),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: onSurface),
                   ),
                   IconButton(
                     tooltip: 'Previous',
@@ -204,21 +199,20 @@ class _FindResultList extends StatelessWidget {
             child: ListTile(
               dense: true,
               selected: isActive,
-              leading: Text(
-                '${match.page}',
-                style: TextStyle(
-                  color: isActive ? activeColor : onSurface,
-                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+              leading: ExcludeSemantics(
+                child: Text(
+                  '${match.page}',
+                  style: TextStyle(
+                    color: isActive ? activeColor : onSurface,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                  ),
                 ),
               ),
-              title: Text(
-                _snippet(match.snippet),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: onSurface,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                ),
+              title: _ExcerptText(
+                page: match.page,
+                excerpt: match.excerpt,
+                subduedColor: readingMode.secondaryText,
+                matchColor: activeColor,
               ),
               onTap: () => onSelect(i),
             ),
@@ -227,10 +221,42 @@ class _FindResultList extends StatelessWidget {
       ),
     );
   }
+}
 
-  String _snippet(String text) {
-    final collapsed = text.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (collapsed.length <= 80) return collapsed;
-    return '${collapsed.substring(0, 80)}…';
+class _ExcerptText extends StatelessWidget {
+  const _ExcerptText({
+    required this.page,
+    required this.excerpt,
+    required this.subduedColor,
+    required this.matchColor,
+  });
+
+  final int page;
+  final SearchExcerpt excerpt;
+  final Color subduedColor;
+  final Color matchColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final subdued = TextStyle(color: subduedColor);
+    final emphasis = TextStyle(color: matchColor, fontWeight: FontWeight.w600);
+    return Semantics(
+      label: 'Page $page: ${excerpt.fullText}',
+      excludeSemantics: true,
+      child: Text.rich(
+        TextSpan(
+          style: subdued,
+          children: [
+            if (excerpt.hasLeadingEllipsis) const TextSpan(text: '… '),
+            TextSpan(text: excerpt.before),
+            TextSpan(text: excerpt.match, style: emphasis),
+            TextSpan(text: excerpt.after),
+            if (excerpt.hasTrailingEllipsis) const TextSpan(text: ' …'),
+          ],
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
   }
 }

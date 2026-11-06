@@ -8,6 +8,7 @@ import 'package:sefer/core/services/file_service.dart';
 import 'package:sefer/core/services/library_persistence_service.dart';
 import 'package:sefer/core/services/recents_service.dart';
 import 'package:sefer/features/library/state/document_actions.dart';
+import 'package:sefer/features/library/state/document_rename_result.dart';
 import 'package:sefer/features/library/state/library_entry.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
 import 'package:sefer/features/recents/state/recents_notifier.dart';
@@ -44,13 +45,18 @@ class _FakeMutator implements FileMutator {
 }
 
 class _FakeKeyStore implements DocumentKeyStore {
+  _FakeKeyStore({this.failures = const []});
+
+  final List<KeyMigrationFailure> failures;
+
   @override
-  Future<void> moveDocument({
+  Future<List<KeyMigrationFailure>> moveDocument({
     required String oldPath,
     required String newPath,
     required String newName,
   }) async {
     log.add('keys:move:$oldPath->$newPath');
+    return failures;
   }
 
   @override
@@ -108,6 +114,7 @@ ProviderContainer makeContainer({
   FileOperationException? renameFailure,
   FileOperationException? deleteFailure,
   List<PersistedEntry> entries = const [],
+  List<KeyMigrationFailure> keyFailures = const [],
 }) {
   final container = ProviderContainer(
     overrides: [
@@ -117,7 +124,9 @@ ProviderContainer makeContainer({
           deleteFailure: deleteFailure,
         ),
       ),
-      documentKeyStoreProvider.overrideWithValue(_FakeKeyStore()),
+      documentKeyStoreProvider.overrideWithValue(
+        _FakeKeyStore(failures: keyFailures),
+      ),
       libraryPersistenceProvider.overrideWithValue(_FakePersistence(entries)),
       recentsStoreProvider.overrideWithValue(_FakeRecents()),
       fileServiceProvider.overrideWithValue(_FakeChecker()),
@@ -148,8 +157,8 @@ void main() {
           .read(documentActionsProvider)
           .rename(path: '/docs/old.pdf', newName: 'new');
 
-      expect(result.ok, isTrue);
-      expect(result.newPath, '/docs/new.pdf');
+      expect(result, isA<DocumentRenameSuccess>());
+      expect((result as DocumentRenameSuccess).newPath, '/docs/new.pdf');
       // The ordering is the contract: state must never be migrated to a path
       // the filesystem has not actually produced yet.
       expect(log.first, 'rename:disk');
@@ -193,9 +202,9 @@ void main() {
           .read(documentActionsProvider)
           .rename(path: '/docs/old.pdf', newName: 'new');
 
-      expect(result.ok, isFalse);
+      expect(result, isA<DocumentRenameRejected>());
       expect(
-        result.message,
+        (result as DocumentRenameRejected).reason,
         'A file with that name already exists in the same folder.',
       );
       // Nothing after the refusal ran, so no store points at a path that
@@ -207,16 +216,41 @@ void main() {
       );
     });
 
-    test('refuses the bundled sample without touching the filesystem', () async {
-      final container = makeContainer();
+    test(
+      'refuses the bundled sample without touching the filesystem',
+      () async {
+        final container = makeContainer();
+
+        final result = await container
+            .read(documentActionsProvider)
+            .rename(path: kSamplePdfPath, newName: 'new');
+
+        expect(result, isA<DocumentRenameRejected>());
+        expect(result.userMessage, contains('cannot be renamed'));
+        expect(log, isEmpty);
+      },
+    );
+
+    test('reports partial migration but still repoints the library', () async {
+      final container = makeContainer(
+        entries: [_entry],
+        keyFailures: [KeyMigrationFailure('annotations', StateError('db'))],
+      );
+      await container.read(libraryEntriesProvider.future);
 
       final result = await container
           .read(documentActionsProvider)
-          .rename(path: kSamplePdfPath, newName: 'new');
+          .rename(path: '/docs/old.pdf', newName: 'new');
 
-      expect(result.ok, isFalse);
-      expect(result.message, contains('cannot be renamed'));
-      expect(log, isEmpty);
+      expect(result, isA<DocumentRenamePartiallyMigrated>());
+      final partial = result as DocumentRenamePartiallyMigrated;
+      expect(partial.newPath, '/docs/new.pdf');
+      expect(partial.failures.single.store, 'annotations');
+      expect(result.userMessage, contains('annotations'));
+      expect(
+        container.read(libraryEntriesProvider).value!.single.path,
+        '/docs/new.pdf',
+      );
     });
 
     test('renames a file that has no library entry', () async {
@@ -228,8 +262,7 @@ void main() {
           .read(documentActionsProvider)
           .rename(path: '/docs/loose.pdf', newName: 'tidy');
 
-      expect(result.ok, isTrue);
-      expect(result.newPath, '/docs/tidy.pdf');
+      expect((result as DocumentRenameSuccess).newPath, '/docs/tidy.pdf');
       // State still migrates: annotations can exist for a file that was only
       // ever opened from the Device tab.
       expect(log, contains('keys:move:/docs/loose.pdf->/docs/tidy.pdf'));

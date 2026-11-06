@@ -10,7 +10,7 @@ import 'package:sefer/core/services/document_keys_service.dart';
 import 'package:sefer/core/services/file_service.dart';
 import 'package:sefer/core/services/reading_progress_service.dart';
 import 'package:sefer/core/theme/reading_mode.dart';
-import 'package:sefer/core/theme/scroll_direction.dart';
+import 'package:sefer/core/theme/reader_layout_mode.dart';
 import 'package:sefer/features/recents/state/recents_notifier.dart';
 
 /// Core infrastructure providers shared across features.
@@ -94,9 +94,8 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
     await ref.read(appSettingsServiceProvider).save(state);
   }
 
-  /// Updates the global scroll direction and persists it.
-  Future<void> setScrollDirection(ScrollDirection direction) async {
-    state = state.copyWith(scrollDirection: direction);
+  Future<void> setReaderLayoutMode(ReaderLayoutMode mode) async {
+    state = state.copyWith(layoutMode: mode);
     await ref.read(appSettingsServiceProvider).save(state);
   }
 

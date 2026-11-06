@@ -31,7 +31,10 @@ void main() {
         _host(
           GreetingHeader(
             title: 'Device',
-            action: IconButton(icon: const Icon(Icons.refresh), onPressed: () {}),
+            action: IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () {},
+            ),
           ),
           brightness: Brightness.light,
         ),

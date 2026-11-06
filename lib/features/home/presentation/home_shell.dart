@@ -20,6 +20,7 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _selectedIndex = 0;
+  bool _deviceVisited = false;
 
   /// 0.0 = at top (more transparent), 1.0 = scrolled down (fully opaque).
   final _scrollProgress = ValueNotifier<double>(0.0);
@@ -59,7 +60,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         _deviceTargetCollectionId = null;
       });
     } else {
-      setState(() => _selectedIndex = index);
+      setState(() {
+        _selectedIndex = index;
+        _deviceVisited = true;
+      });
     }
     _scrollProgress.value = _tabScrollOffsets[index] / 80.0;
   }
@@ -69,6 +73,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     _deviceKey.currentState?.clearSelection();
     setState(() {
       _selectedIndex = 1;
+      _deviceVisited = true;
       _deviceTargetCollectionId = collectionId;
     });
   }
@@ -84,7 +89,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         // Back on any non-Library tab → go to Library.
         canPop: _selectedIndex == 0,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop && _selectedIndex != 0) {
+          if (didPop) return;
+          if (_selectedIndex == 1 &&
+              (_deviceKey.currentState?.handleBack() ?? false)) {
+            return;
+          }
+          if (_selectedIndex != 0) {
             _onTabChanged(0);
           }
         },
@@ -105,12 +115,15 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                         bottomPadding: kNavBarHeight + bottomPadding,
                         onAddToCollection: navigateToDeviceForCollection,
                       ),
-                      DevicePage(
-                        key: _deviceKey,
-                        bottomPadding: kNavBarHeight + bottomPadding,
-                        targetCollectionId: _deviceTargetCollectionId,
-                        onDone: () => _onTabChanged(0),
-                      ),
+                      if (_deviceVisited)
+                        DevicePage(
+                          key: _deviceKey,
+                          bottomPadding: kNavBarHeight + bottomPadding,
+                          targetCollectionId: _deviceTargetCollectionId,
+                          onDone: () => _onTabChanged(0),
+                        )
+                      else
+                        const SizedBox.shrink(),
                       SettingsPage(
                         bottomPadding: kNavBarHeight + bottomPadding,
                       ),
