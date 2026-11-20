@@ -7,24 +7,30 @@ import 'package:sefer/core/theme/reading_mode.dart';
 import 'package:sefer/core/theme/reader_layout_mode.dart';
 
 class AppSettings {
+  static const defaultDisplayName = 'Reader';
+
   final ReadingMode readingMode;
   final ReaderLayoutMode layoutMode;
   final ThemeMode themeMode;
+  final String displayName;
 
   const AppSettings({
     this.readingMode = ReadingMode.light,
     this.layoutMode = ReaderLayoutMode.defaultMode,
     this.themeMode = ThemeMode.system,
+    this.displayName = defaultDisplayName,
   });
 
   AppSettings copyWith({
     ReadingMode? readingMode,
     ReaderLayoutMode? layoutMode,
     ThemeMode? themeMode,
+    String? displayName,
   }) => AppSettings(
     readingMode: readingMode ?? this.readingMode,
     layoutMode: layoutMode ?? this.layoutMode,
     themeMode: themeMode ?? this.themeMode,
+    displayName: displayName ?? this.displayName,
   );
 
   // == and hashCode are required so that Riverpod can detect when a copyWith
@@ -34,10 +40,12 @@ class AppSettings {
       other is AppSettings &&
       other.readingMode == readingMode &&
       other.layoutMode == layoutMode &&
-      other.themeMode == themeMode;
+      other.themeMode == themeMode &&
+      other.displayName == displayName;
 
   @override
-  int get hashCode => Object.hash(readingMode, layoutMode, themeMode);
+  int get hashCode =>
+      Object.hash(readingMode, layoutMode, themeMode, displayName);
 }
 
 abstract class AppSettingsStore {
@@ -51,6 +59,7 @@ class AppSettingsService implements AppSettingsStore {
   // Predates ReaderLayoutMode; renaming the key would reset saved layouts.
   static const _keyLayoutMode = 'app_scroll_direction';
   static const _keyThemeMode = 'app_theme_mode';
+  static const _keyDisplayName = 'app_display_name';
 
   @override
   Future<AppSettings> load() async {
@@ -59,6 +68,7 @@ class AppSettingsService implements AppSettingsStore {
       final modeName = prefs.getString(_keyReadingMode);
       final layoutToken = prefs.getString(_keyLayoutMode);
       final themeName = prefs.getString(_keyThemeMode);
+      final storedName = prefs.getString(_keyDisplayName)?.trim();
       return AppSettings(
         readingMode: ReadingMode.values.firstWhere(
           (m) => m.name == modeName,
@@ -69,6 +79,9 @@ class AppSettingsService implements AppSettingsStore {
           (t) => t.name == themeName,
           orElse: () => ThemeMode.system,
         ),
+        displayName: (storedName == null || storedName.isEmpty)
+            ? AppSettings.defaultDisplayName
+            : storedName,
       );
     } catch (e, s) {
       developer.log(
@@ -92,6 +105,7 @@ class AppSettingsService implements AppSettingsStore {
         encodeReaderLayoutMode(settings.layoutMode),
       );
       await prefs.setString(_keyThemeMode, settings.themeMode.name);
+      await prefs.setString(_keyDisplayName, settings.displayName);
     } catch (e, s) {
       developer.log(
         'Failed to save app settings',

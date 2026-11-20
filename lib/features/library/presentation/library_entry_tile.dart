@@ -18,14 +18,21 @@ class LibraryEntryTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final collections = ref.watch(collectionsProvider).value ?? [];
-    final collectionName = entry.collectionId != null
-        ? collections
-              .where((c) => c.id == entry.collectionId)
-              .map((c) => c.name)
-              .firstOrNull
-        : null;
+    final collectionNames = [
+      for (final collection in collections)
+        if (entry.collectionIds.contains(collection.id)) collection.name,
+    ];
+    final tags = [...collectionNames, if (entry.isFavorite) 'Favorite'];
 
-    final tags = [?collectionName, if (entry.isFavorite) 'Favorite'];
+    void showActions() => showFileActionsSheet(
+      context,
+      ref,
+      path: entry.path,
+      name: entry.name,
+      libraryEntryId: entry.id,
+      status: entry.status,
+      showInFavorites: entry.isFavorite,
+    );
 
     return FileListTile(
       title: entry.name,
@@ -33,23 +40,20 @@ class LibraryEntryTile extends ConsumerWidget {
       gradientSeed: entry.path,
       unavailable: entry.status != FileStatus.ok,
       semanticLabel: 'Open ${entry.name}',
-      trailing: entry.isFavorite
-          ? const Icon(Icons.favorite, size: 14, color: AppColors.brand)
-          : null,
-      onTap: entry.status == FileStatus.ok ? () => _open(context, ref) : null,
-      onLongPress: () => showFileActionsSheet(
-        context,
-        ref,
-        path: entry.path,
-        name: entry.name,
-        libraryEntryId: entry.id,
-        status: entry.status,
-        showInFavorites: entry.isFavorite,
-        showInCollectionId: entry.collectionId,
-        showInCollectionLabel: collectionName != null
-            ? 'Show in "$collectionName"'
-            : null,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (entry.isFavorite)
+            const Icon(Icons.favorite, size: 14, color: AppColors.brand),
+          IconButton(
+            icon: const Icon(Icons.more_vert, size: 20),
+            tooltip: 'File actions for ${entry.name}',
+            onPressed: showActions,
+          ),
+        ],
       ),
+      onTap: entry.status == FileStatus.ok ? () => _open(context, ref) : null,
+      onLongPress: showActions,
     );
   }
 

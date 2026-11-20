@@ -9,14 +9,14 @@ LibraryEntry _entry({
   required String id,
   required String path,
   bool favorite = false,
-  String? collectionId,
+  Set<String> collectionIds = const {},
 }) => LibraryEntry(
   id: id,
   name: path.split('/').last,
   path: path,
   status: FileStatus.ok,
   isFavorite: favorite,
-  collectionId: collectionId,
+  collectionIds: collectionIds,
 );
 
 void main() {
@@ -28,7 +28,7 @@ void main() {
     final service = LibraryPersistenceService();
     final entries = [
       _entry(id: '1', path: '/a.pdf', favorite: true),
-      _entry(id: '2', path: '/b.pdf', collectionId: 'col-1'),
+      _entry(id: '2', path: '/b.pdf', collectionIds: {'col-1', 'col-2'}),
     ];
 
     // saveEntries is debounced; invoke _write directly via a zero-delay pump.
@@ -38,7 +38,19 @@ void main() {
     final loaded = await service.loadEntries();
     expect(loaded, hasLength(2));
     expect(loaded.first.isFavorite, isTrue);
-    expect(loaded.last.collectionId, 'col-1');
+    expect(loaded.last.collectionIds, {'col-1', 'col-2'});
+  });
+
+  test('migrates a legacy collectionId into collectionIds', () async {
+    SharedPreferences.setMockInitialValues({
+      'library_entries_v1':
+          '[{"id":"1","name":"a.pdf","path":"/a.pdf",'
+          '"collectionId":"legacy"}]',
+    });
+
+    final loaded = await LibraryPersistenceService().loadEntries();
+
+    expect(loaded.single.collectionIds, {'legacy'});
   });
 
   test('returns empty list on corrupt JSON', () async {

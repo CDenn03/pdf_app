@@ -57,7 +57,7 @@ void main() {
     final created = _find(container, '/docs/new.pdf')!;
     expect(created.name, 'new.pdf');
     expect(created.isFavorite, isTrue);
-    expect(created.collectionId, isNull);
+    expect(created.collectionIds, isEmpty);
     expect(created.id, isNotEmpty);
   });
 

@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import 'package:sefer/features/reader/domain/reader_route_arguments.dart';
 import 'package:sefer/core/theme/app_colors.dart';
+import 'package:sefer/features/library/presentation/collection_picker.dart';
+import 'package:sefer/features/library/state/document_collections.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
 import 'package:sefer/features/recents/presentation/recent_actions_sheet.dart';
 import 'package:sefer/features/recents/presentation/recent_tile.dart';
@@ -58,6 +60,25 @@ class _RecentsPageState extends ConsumerState<RecentsPage> {
     await ref
         .read(libraryEntriesProvider.notifier)
         .setFavoriteForPaths(_selection.selectedPaths, favorite: favorite);
+    _selection.clear();
+  }
+
+  Future<void> _addSelectedToCollection() async {
+    final collectionId = await pickOrCreateCollection(context, ref);
+    if (collectionId == null || !mounted) return;
+    final paths = _selection.selectedPaths;
+    await ref
+        .read(libraryEntriesProvider.notifier)
+        .addFilesToCollection(paths, collectionId);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${paths.length} file${paths.length == 1 ? '' : 's'} added to '
+          'collection',
+        ),
+      ),
+    );
     _selection.clear();
   }
 
@@ -127,6 +148,20 @@ class _RecentsPageState extends ConsumerState<RecentsPage> {
                   selectedPaths: _selection.selectedPaths,
                   favoritePaths: favoritePaths,
                   onSetFavorite: _setFavorite,
+                  membershipLabel: singleSelectionMembershipLabel(
+                    selectedPaths: _selection.selectedPaths,
+                    entries:
+                        ref.watch(libraryEntriesProvider).value ?? const [],
+                    collections:
+                        ref.watch(collectionsProvider).value ?? const [],
+                  ),
+                  extraActions: [
+                    TextButton.icon(
+                      onPressed: _addSelectedToCollection,
+                      icon: const Icon(Icons.collections_bookmark_outlined),
+                      label: const Text('Add to collection'),
+                    ),
+                  ],
                 ),
               )
             : null,

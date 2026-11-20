@@ -5,7 +5,9 @@ import 'package:sefer/core/services/file_service.dart';
 import 'package:sefer/core/services/library_persistence_service.dart';
 import 'package:sefer/core/services/pdf_scan_service.dart';
 import 'package:sefer/core/services/recents_service.dart';
+import 'package:sefer/features/device/data/device_pdf_cache.dart';
 import 'package:sefer/features/device/data/file_metadata_reader.dart';
+import 'package:sefer/features/device/domain/device_pdf_entry.dart';
 import 'package:sefer/features/library/state/library_entry.dart';
 
 class FakeFileChecker implements FileChecker {
@@ -36,11 +38,31 @@ class FakeLibraryPersistence implements LibraryPersistence {
 }
 
 class FakeCollectionsService extends CollectionsService {
+  FakeCollectionsService([this.initial = const []]);
+
+  final List<PdfCollection> initial;
+
   @override
-  Future<List<PdfCollection>> load() async => const [];
+  Future<List<PdfCollection>> load() async => initial;
 
   @override
   Future<void> save(List<PdfCollection> collections) async {}
+}
+
+class FakeDevicePdfCache implements DevicePdfCache {
+  FakeDevicePdfCache([this.entries]);
+
+  List<DevicePdfEntry>? entries;
+  final saves = <List<DevicePdfEntry>>[];
+
+  @override
+  Future<List<DevicePdfEntry>?> load() async => entries;
+
+  @override
+  Future<void> save(List<DevicePdfEntry> entries) async {
+    this.entries = [...entries];
+    saves.add([...entries]);
+  }
 }
 
 class FakePdfScanner implements PdfScanner {

@@ -11,6 +11,7 @@ import 'package:sefer/core/constants.dart';
 import 'package:sefer/core/services/app_settings_service.dart';
 import 'package:sefer/core/models/annotation_type.dart';
 import 'package:sefer/core/theme/reading_mode.dart';
+import 'package:sefer/features/library/presentation/collection_picker.dart';
 import 'package:sefer/features/library/state/document_actions.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
 import 'package:sefer/features/reader/presentation/reader_more_sheet.dart';
@@ -307,6 +308,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     ).then((_) => _showBars());
   }
 
+  Future<void> _addToCollection() async {
+    final entry = ref
+        .read(libraryEntriesProvider)
+        .value
+        ?.where((item) => item.path == widget.pdfPath)
+        .firstOrNull;
+    final collectionId = await pickOrCreateCollection(
+      context,
+      ref,
+      existingCollectionIds: entry?.collectionIds ?? const {},
+    );
+    if (collectionId == null || !mounted) return;
+    await ref
+        .read(libraryEntriesProvider.notifier)
+        .addFile(widget.pdfPath, collectionIds: {collectionId});
+    if (mounted) _showToast('Added to collection.');
+  }
+
   void _openMore() {
     _hideBars();
     showReaderMoreSheet(
@@ -315,6 +334,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       pdfPath: widget.pdfPath,
       renameCoordinator: _isAsset ? null : _renameCoordinator,
       onAnnotations: _openAnnotations,
+      onAddToCollection: _addToCollection,
       onPanelClosed: _showBars,
     ).then((_) {
       if (mounted && !_annotating) _showBars();

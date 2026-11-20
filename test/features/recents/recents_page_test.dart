@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:sefer/core/models/collection.dart';
 import 'package:sefer/core/providers.dart';
+import 'package:sefer/core/services/library_persistence_service.dart';
 import 'package:sefer/core/theme/app_theme.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
 import 'package:sefer/features/recents/presentation/recents_page.dart';
@@ -13,12 +15,19 @@ import '../../support/library_fakes.dart';
 Future<ProviderContainer> _pump(
   WidgetTester tester, {
   String? initialSelectedPath,
+  FakeLibraryPersistence? persistence,
+  List<PdfCollection> collections = const [],
 }) async {
   final now = DateTime.now();
   final container = ProviderContainer(
     overrides: [
       fileServiceProvider.overrideWithValue(FakeFileChecker()),
-      libraryPersistenceProvider.overrideWithValue(FakeLibraryPersistence()),
+      libraryPersistenceProvider.overrideWithValue(
+        persistence ?? FakeLibraryPersistence(),
+      ),
+      collectionsServiceProvider.overrideWithValue(
+        FakeCollectionsService(collections),
+      ),
       recentsStoreProvider.overrideWithValue(
         FakeRecentsStore([
           RecentEntry(path: '/r/one.pdf', name: 'one.pdf', openedAt: now),
@@ -92,6 +101,57 @@ void main() {
     expect(find.text('Open'), findsOneWidget);
     expect(find.text('Share'), findsOneWidget);
     expect(find.text('Rename'), findsOneWidget);
+  });
+
+  testWidgets('selecting one book shows the collections it belongs to', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      initialSelectedPath: '/r/one.pdf',
+      persistence: FakeLibraryPersistence(
+        initial: const [
+          PersistedEntry(
+            id: 'one',
+            name: 'one.pdf',
+            path: '/r/one.pdf',
+            collectionIds: {'c1', 'c2'},
+          ),
+        ],
+      ),
+      collections: const [
+        PdfCollection(id: 'c1', name: 'Papers'),
+        PdfCollection(id: 'c2', name: 'Novels'),
+      ],
+    );
+
+    expect(find.text('In Papers · Novels'), findsOneWidget);
+    expect(find.text('Add to collection'), findsOneWidget);
+  });
+
+  testWidgets('overflow lists collections without opening the book', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      persistence: FakeLibraryPersistence(
+        initial: const [
+          PersistedEntry(
+            id: 'one',
+            name: 'one.pdf',
+            path: '/r/one.pdf',
+            collectionIds: {'c1'},
+          ),
+        ],
+      ),
+      collections: const [PdfCollection(id: 'c1', name: 'Papers')],
+    );
+
+    await tester.tap(find.byTooltip('File actions for one.pdf'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Show in "Papers"'), findsOneWidget);
+    expect(find.text('Add to collection'), findsOneWidget);
   });
 
   testWidgets('cancel leaves selection mode', (tester) async {

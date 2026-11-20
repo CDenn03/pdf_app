@@ -58,7 +58,9 @@ class _CollectionScreenState extends ConsumerState<CollectionScreen> {
     final baseEntries = widget.isFavorites
         ? allEntries.where((e) => e.isFavorite).toList()
         : allEntries
-              .where((e) => e.collectionId == widget.collectionId)
+              .where(
+                (entry) => entry.collectionIds.contains(widget.collectionId),
+              )
               .toList();
 
     final q = _query.toLowerCase().trim();
@@ -137,7 +139,7 @@ class _CollectionScreenState extends ConsumerState<CollectionScreen> {
               delegate: SliverChildBuilderDelegate(
                 (_, i) => _FileTile(
                   entry: entries[i],
-                  inCollection: !widget.isFavorites,
+                  collectionId: widget.isFavorites ? null : widget.collectionId,
                 ),
                 childCount: entries.length,
               ),
@@ -149,29 +151,41 @@ class _CollectionScreenState extends ConsumerState<CollectionScreen> {
 }
 
 class _FileTile extends ConsumerWidget {
-  const _FileTile({required this.entry, required this.inCollection});
+  const _FileTile({required this.entry, required this.collectionId});
 
   final LibraryEntry entry;
-  final bool inCollection;
+  final String? collectionId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    void showActions() => showFileActionsSheet(
+      context,
+      ref,
+      path: entry.path,
+      name: entry.name,
+      libraryEntryId: entry.id,
+      status: entry.status,
+      removeFromCollectionId: collectionId,
+    );
+
     return FileListTile(
       title: entry.name.replaceAll('.pdf', ''),
       gradientSeed: entry.path,
       unavailable: entry.status != FileStatus.ok,
       iconSize: 48,
-      trailing: _FavoriteButton(entry: entry),
-      onTap: entry.status == FileStatus.ok ? () => _open(context, ref) : null,
-      onLongPress: () => showFileActionsSheet(
-        context,
-        ref,
-        path: entry.path,
-        name: entry.name,
-        libraryEntryId: entry.id,
-        status: entry.status,
-        removeFromCollectionId: inCollection ? entry.collectionId : null,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _FavoriteButton(entry: entry),
+          IconButton(
+            icon: const Icon(Icons.more_vert, size: 20),
+            tooltip: 'File actions for ${entry.name}',
+            onPressed: showActions,
+          ),
+        ],
       ),
+      onTap: entry.status == FileStatus.ok ? () => _open(context, ref) : null,
+      onLongPress: showActions,
     );
   }
 

@@ -25,6 +25,8 @@ Future<List<bool>> _pump(
   return calls;
 }
 
+void _noop(bool _) {}
+
 void main() {
   testWidgets('mixed selection shows both favorite actions', (tester) async {
     await _pump(tester, selected: {'/a', '/b'}, favorites: {'/a'});
@@ -38,6 +40,26 @@ void main() {
 
     expect(find.text('Mark favorite'), findsNothing);
     expect(find.text('Remove favorite'), findsOneWidget);
+  });
+
+  testWidgets('shows collection membership for a single selected book', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SelectionActionBar(
+            selectedPaths: {'/a'},
+            favoritePaths: {},
+            onSetFavorite: _noop,
+            membershipLabel: 'In Papers · Novels',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('In Papers · Novels'), findsOneWidget);
+    expect(find.text('Add to collection'), findsNothing);
   });
 
   testWidgets('no favorites shows only Mark favorite and extras', (

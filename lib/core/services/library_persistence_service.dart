@@ -7,10 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sefer/features/library/state/library_entry.dart';
 
 /// Persists the library entry list across app restarts.
-///
-/// Stores entries as a JSON array in SharedPreferences. Only persists
-/// fields that cannot be re-derived from the filesystem (id, name, path,
-/// lastOpenedAt, collectionId). File status is always re-checked on load.
 abstract class LibraryPersistence {
   Future<List<PersistedEntry>> loadEntries();
   Future<void> saveEntries(List<LibraryEntry> entries);
@@ -22,7 +18,7 @@ class PersistedEntry {
   final String name;
   final String path;
   final DateTime? lastOpenedAt;
-  final String? collectionId;
+  final Set<String> collectionIds;
   final bool isFavorite;
 
   const PersistedEntry({
@@ -30,27 +26,34 @@ class PersistedEntry {
     required this.name,
     required this.path,
     this.lastOpenedAt,
-    this.collectionId,
+    this.collectionIds = const {},
     this.isFavorite = false,
   });
 
-  factory PersistedEntry.fromJson(Map<String, dynamic> json) => PersistedEntry(
-    id: json['id'] as String,
-    name: json['name'] as String,
-    path: json['path'] as String,
-    lastOpenedAt: json['lastOpenedAt'] != null
-        ? DateTime.tryParse(json['lastOpenedAt'] as String)
-        : null,
-    collectionId: json['collectionId'] as String?,
-    isFavorite: json['isFavorite'] as bool? ?? false,
-  );
+  factory PersistedEntry.fromJson(Map<String, dynamic> json) {
+    final legacyCollectionId = json['collectionId'] as String?;
+    final collectionIds = (json['collectionIds'] as List<dynamic>?)
+        ?.whereType<String>()
+        .toSet();
+    return PersistedEntry(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      path: json['path'] as String,
+      lastOpenedAt: json['lastOpenedAt'] != null
+          ? DateTime.tryParse(json['lastOpenedAt'] as String)
+          : null,
+      collectionIds:
+          collectionIds ?? {?legacyCollectionId},
+      isFavorite: json['isFavorite'] as bool? ?? false,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
     'path': path,
     if (lastOpenedAt != null) 'lastOpenedAt': lastOpenedAt!.toIso8601String(),
-    if (collectionId != null) 'collectionId': collectionId,
+    if (collectionIds.isNotEmpty) 'collectionIds': collectionIds.toList(),
     if (isFavorite) 'isFavorite': isFavorite,
   };
 }
@@ -99,7 +102,7 @@ class LibraryPersistenceService implements LibraryPersistence {
               name: e.name,
               path: e.path,
               lastOpenedAt: e.lastOpenedAt,
-              collectionId: e.collectionId,
+              collectionIds: e.collectionIds,
               isFavorite: e.isFavorite,
             ).toJson(),
           )

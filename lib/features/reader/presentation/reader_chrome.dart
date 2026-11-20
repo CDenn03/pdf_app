@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'package:sefer/core/models/collection.dart';
 import 'package:sefer/core/theme/app_spacing.dart';
 import 'package:sefer/core/theme/reading_mode.dart';
 import 'package:sefer/features/reader/presentation/reader_favorite_button.dart';
+import 'package:sefer/shared/widgets/document_collection_tiles.dart';
 
 class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
   const ReaderAppBar({
@@ -272,45 +274,60 @@ class ReaderMoreMenu extends StatelessWidget {
     super.key,
     required this.onAnnotations,
     required this.onReadingMode,
+    required this.onAddToCollection,
     required this.onShare,
     this.onRename,
+    this.collections = const [],
+    this.onOpenCollection,
   });
 
   final VoidCallback onAnnotations;
   final VoidCallback onReadingMode;
+  final VoidCallback onAddToCollection;
   final VoidCallback onShare;
   final VoidCallback? onRename;
+  final List<PdfCollection> collections;
+  final ValueChanged<PdfCollection>? onOpenCollection;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final body = theme.textTheme.bodyMedium;
     return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.sticky_note_2_outlined),
-            title: Text('Annotations', style: theme.textTheme.bodyMedium),
-            onTap: onAnnotations,
-          ),
-          ListTile(
-            leading: const Icon(Icons.brightness_medium_outlined),
-            title: Text('Reading mode', style: theme.textTheme.bodyMedium),
-            onTap: onReadingMode,
-          ),
-          ListTile(
-            leading: const Icon(Icons.share_outlined),
-            title: Text('Share', style: theme.textTheme.bodyMedium),
-            onTap: onShare,
-          ),
-          if (onRename != null)
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             ListTile(
-              leading: const Icon(Icons.drive_file_rename_outline),
-              title: Text('Rename', style: theme.textTheme.bodyMedium),
-              onTap: onRename,
+              leading: const Icon(Icons.sticky_note_2_outlined),
+              title: Text('Annotations', style: body),
+              onTap: onAnnotations,
             ),
-          const SizedBox(height: 8),
-        ],
+            ListTile(
+              leading: const Icon(Icons.brightness_medium_outlined),
+              title: Text('Reading mode', style: body),
+              onTap: onReadingMode,
+            ),
+            DocumentCollectionTiles(
+              collections: collections,
+              onAddToCollection: onAddToCollection,
+              onOpenCollection: onOpenCollection,
+              titleStyle: body,
+            ),
+            ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: Text('Share', style: body),
+              onTap: onShare,
+            ),
+            if (onRename != null)
+              ListTile(
+                leading: const Icon(Icons.drive_file_rename_outline),
+                title: Text('Rename', style: body),
+                onTap: onRename,
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }

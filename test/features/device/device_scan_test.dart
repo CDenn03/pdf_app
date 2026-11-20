@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:sefer/core/models/file_status.dart';
 import 'package:sefer/core/providers.dart';
+import 'package:sefer/core/services/pdf_scan_service.dart';
 import 'package:sefer/core/utils/bounded_concurrency.dart';
 import 'package:sefer/features/device/data/file_metadata_reader.dart';
+import 'package:sefer/features/device/domain/device_pdf_entry.dart';
 import 'package:sefer/features/device/state/device_files_providers.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
 
@@ -14,11 +19,22 @@ ProviderContainer _container(List<String> paths, FakeMetadataReader reader) {
     overrides: [
       fileServiceProvider.overrideWithValue(FakeFileChecker()),
       pdfScannerProvider.overrideWithValue(FakePdfScanner(paths)),
+      devicePdfCacheProvider.overrideWithValue(FakeDevicePdfCache()),
       fileMetadataReaderProvider.overrideWithValue(reader),
     ],
   );
   addTearDown(container.dispose);
   return container;
+}
+
+class _ControlledScanner implements PdfScanner {
+  final result = Completer<List<String>>();
+
+  @override
+  Future<List<String>> scanForPdfs() => result.future;
+
+  @override
+  Future<bool> checkPermission() async => true;
 }
 
 void main() {
@@ -76,6 +92,44 @@ void main() {
     expect(reader.maxInFlight, lessThanOrEqualTo(8));
     expect(reader.maxInFlight, greaterThan(1));
   });
+
+  test(
+    'cached rows stay visible during refresh and report additions',
+    () async {
+      const cachedEntry = DevicePdfEntry(
+        path: '/d/a.pdf',
+        name: 'a.pdf',
+        status: FileStatus.ok,
+      );
+      final scanner = _ControlledScanner();
+      final cache = FakeDevicePdfCache([cachedEntry]);
+      final container = ProviderContainer(
+        overrides: [
+          fileServiceProvider.overrideWithValue(FakeFileChecker()),
+          pdfScannerProvider.overrideWithValue(scanner),
+          devicePdfCacheProvider.overrideWithValue(cache),
+          fileMetadataReaderProvider.overrideWithValue(
+            FakeMetadataReader(const {}),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      expect(await container.read(deviceFilesProvider.future), [cachedEntry]);
+      final refresh = container.read(deviceFilesProvider.notifier).refresh();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(deviceFilesProvider).value, [cachedEntry]);
+      expect(container.read(deviceScanStatusProvider).isRefreshing, isTrue);
+
+      scanner.result.complete(['/d/a.pdf', '/d/b.pdf']);
+
+      expect(await refresh, 1);
+      expect(container.read(deviceFilesProvider).value, hasLength(2));
+      expect(container.read(deviceScanStatusProvider).isRefreshing, isFalse);
+      expect(cache.saves.single, hasLength(2));
+    },
+  );
 
   test('mapWithConcurrency keeps input order', () async {
     final result = await mapWithConcurrency<int, int>([3, 1, 2], 2, (n) async {

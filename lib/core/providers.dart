@@ -104,6 +104,15 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
     state = state.copyWith(themeMode: mode);
     await ref.read(appSettingsServiceProvider).save(state);
   }
+
+  /// Updates the home-greeting display name and persists it.
+  Future<void> setDisplayName(String name) async {
+    final trimmed = name.trim();
+    final next = trimmed.isEmpty ? AppSettings.defaultDisplayName : trimmed;
+    if (next == state.displayName) return;
+    state = state.copyWith(displayName: next);
+    await ref.read(appSettingsServiceProvider).save(state);
+  }
 }
 
 // ---------------------------------------------------------------------------
