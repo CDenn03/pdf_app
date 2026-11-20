@@ -15,7 +15,6 @@ import 'package:sefer/features/library/presentation/collection_picker.dart';
 import 'package:sefer/features/library/state/document_actions.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
 import 'package:sefer/features/reader/presentation/reader_more_sheet.dart';
-import 'package:sefer/features/reader/presentation/reader_rename_flow.dart';
 import 'package:sefer/features/reader/presentation/reader_rename_host.dart';
 import 'package:sefer/features/reader/state/open_document_rename_coordinator.dart';
 import 'package:sefer/features/recents/state/recents_notifier.dart';
@@ -33,13 +32,10 @@ import 'package:sefer/features/reader/presentation/reader_bar_controller.dart';
 import 'package:sefer/features/reader/presentation/reader_chrome.dart';
 import 'package:sefer/features/reader/presentation/reader_dialogs.dart';
 import 'package:sefer/features/reader/presentation/reader_document_controller.dart';
-import 'package:sefer/features/reader/presentation/reader_find_bar.dart';
 import 'package:sefer/features/reader/presentation/reader_overlay_style.dart';
-import 'package:sefer/features/reader/presentation/reader_page_scrubber.dart';
-import 'package:sefer/features/reader/presentation/reader_overlays.dart';
+import 'package:sefer/features/reader/presentation/reader_page_body.dart';
 import 'package:sefer/features/reader/presentation/reader_viewport.dart';
 import 'package:sefer/features/reader/presentation/reader_viewport_config.dart';
-import 'package:sefer/features/reader/presentation/reader_viewport_inset.dart';
 import 'package:sefer/features/reader/presentation/toc_panel.dart';
 import 'package:sefer/features/reader/state/document_search_controller.dart';
 import 'package:sefer/features/reader/state/providers.dart';
@@ -369,117 +365,39 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                   readingMode: readingMode,
                 )
               : null,
-          body: _buildBody(settings, readingMode),
+          body: ReaderPageBody(
+            readingMode: readingMode,
+            barVisible: _barsVisible && !_annotating,
+            annotating: _annotating,
+            activeTool: _activeTool,
+            findBarVisible: _findBarVisible,
+            showLoading: !_readerState.isLoaded || !_resumeResolved,
+            showViewer: _resumeResolved && !_viewportSuspended,
+            currentPage: _currentPage,
+            totalPages: _totalPages,
+            renameBusy: _renameCoordinator.busy,
+            search: _search,
+            viewer: _buildViewer(settings),
+            onJumpToPage: _showJumpToPageDialog,
+            onToolChanged: (tool) {
+              if (tool == AnnotationTool.bookmark) {
+                _addBookmarkWithLabel();
+              } else {
+                _annotationController.setTool(tool);
+              }
+            },
+            onExitAnnotation: _exitAnnotationMode,
+            onUndo: _performUndo,
+            onSearch: _openSearch,
+            onAnnotate: _enterAnnotationMode,
+            onToc: _openToc,
+            onMore: _openMore,
+            onCloseFindBar: _closeFindBar,
+            onPageRequested: (page) =>
+                unawaited(_pageNavigation.goToPage(page)),
+          ),
         ),
       ),
-    );
-  }
-
-  Widget _buildBody(AppSettings settings, ReadingMode readingMode) {
-    const barHeight = 60.0;
-    const barMargin = 12.0;
-    final barVisible = _barsVisible && !_annotating;
-    // Keep the indicator above the floating bar with a comfortable gap.
-    final indicatorBottom = barVisible
-        ? barHeight + barMargin + MediaQuery.of(context).padding.bottom + 12
-        : 16.0;
-
-    final topPadding = MediaQuery.of(context).padding.top;
-    final appBarShown = barVisible;
-    final findBarTop = topPadding + (appBarShown ? kToolbarHeight : 0.0);
-
-    return Stack(
-      children: [
-        ReaderViewportInset(
-          topInset: topPadding,
-          child: ReadingModeFilter(
-            mode: readingMode,
-            child: _resumeResolved && !_viewportSuspended
-                ? _buildViewer(settings)
-                : const SizedBox.expand(),
-          ),
-        ),
-
-        if (!_readerState.isLoaded || !_resumeResolved)
-          const DocumentLoadingOverlay(),
-
-        if (_findBarVisible)
-          Positioned(
-            top: findBarTop,
-            left: 0,
-            right: 0,
-            child: ReaderFindBar(
-              search: _search,
-              readingMode: readingMode,
-              onClose: _closeFindBar,
-            ),
-          ),
-
-        Positioned(
-          bottom: indicatorBottom,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: PageIndicator(
-              currentPage: _currentPage,
-              totalPages: _totalPages,
-              onTap: _showJumpToPageDialog,
-            ),
-          ),
-        ),
-
-        // Floating annotation toolbar (replaces pill bar while annotating).
-        if (_annotating)
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 12 + MediaQuery.of(context).padding.bottom,
-            child: AnnotationToolbar(
-              activeTool: _activeTool,
-              onToolChanged: (tool) {
-                if (tool == AnnotationTool.bookmark) {
-                  _addBookmarkWithLabel();
-                } else {
-                  _annotationController.setTool(tool);
-                }
-              },
-              onExit: _exitAnnotationMode,
-              onUndo: _performUndo,
-              readingMode: readingMode,
-            ),
-          ),
-
-        // Floating pill action bar.
-        if (barVisible)
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: barMargin + MediaQuery.of(context).padding.bottom,
-            child: BottomActionBar(
-              onSearch: _openSearch,
-              onAnnotate: _enterAnnotationMode,
-              onToc: _openToc,
-              onMore: _openMore,
-              readingMode: readingMode,
-            ),
-          ),
-
-        if (_totalPages > 1)
-          Positioned(
-            right: MediaQuery.of(context).padding.right,
-            top: findBarTop + (_findBarVisible ? 64 : 8),
-            bottom: indicatorBottom + 40,
-            child: ReaderPageScrubber(
-              currentPage: _currentPage,
-              totalPages: _totalPages,
-              readingMode: readingMode,
-              onPageRequested: (page) =>
-                  unawaited(_pageNavigation.goToPage(page)),
-            ),
-          ),
-
-        if (_renameCoordinator.busy) const RenameProgressOverlay(),
-      ],
     );
   }
 
