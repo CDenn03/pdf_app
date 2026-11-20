@@ -43,4 +43,24 @@ void main() {
     expect(prefs.getString(_layoutKey), 'bookFlip');
     expect((await service.load()).layoutMode, ReaderLayoutMode.bookFlip);
   });
+
+  test('defaults display name to Reader when nothing is stored', () async {
+    final settings = await _loadWith({});
+    expect(settings.displayName, AppSettings.defaultDisplayName);
+  });
+
+  test('falls back to Reader for a blank stored name', () async {
+    final settings = await _loadWith({'app_display_name': '   '});
+    expect(settings.displayName, AppSettings.defaultDisplayName);
+  });
+
+  test('saved display name reloads', () async {
+    SharedPreferences.setMockInitialValues({});
+    final service = AppSettingsService();
+    await service.save(const AppSettings(displayName: 'Ada'));
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('app_display_name'), 'Ada');
+    expect((await service.load()).displayName, 'Ada');
+  });
 }

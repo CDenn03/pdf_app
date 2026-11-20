@@ -29,7 +29,9 @@ class CollectionGrid extends StatelessWidget {
     // indexOf scans (#21).
     final collectionCounts = {
       for (var i = 0; i < collections.length; i++)
-        i: entries.where((e) => e.collectionId == collections[i].id).length,
+        i: entries
+            .where((entry) => entry.collectionIds.contains(collections[i].id))
+            .length,
     };
 
     final cardCount = 1 + collections.length;

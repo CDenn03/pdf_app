@@ -21,7 +21,7 @@ LibraryEntry _entry({
     path: '/x/$id.pdf',
     status: status,
     isFavorite: favorite,
-    collectionId: collectionId,
+    collectionIds: {?collectionId},
   );
 }
 

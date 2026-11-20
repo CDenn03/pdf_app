@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:sefer/core/database/database_helper.dart';
 import 'package:sefer/core/models/annotation.dart';
 import 'package:sefer/core/models/annotation_color.dart';
+import 'package:sefer/core/models/annotation_search.dart';
 import 'package:sefer/core/models/annotation_type.dart';
 import 'package:sefer/core/models/relative_rect_model.dart';
 
@@ -94,6 +95,60 @@ class AnnotationDao {
       where: 'pdf_id = ?',
       whereArgs: [oldPdfId],
     );
+  }
+
+  /// Finds non-deleted annotations whose highlight, note, label, or note
+  /// entries contain [query]. Empty queries return no rows.
+  Future<List<AnnotationSearchRow>> search(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return const [];
+
+    final pattern = likeQueryPattern(trimmed);
+    const escape = r"ESCAPE '\'";
+    final db = await _db;
+    final maps = await db.rawQuery(
+      '''
+      SELECT a.*, n.text AS note_text
+      FROM annotations a
+      LEFT JOIN note_entries n ON n.annotation_id = a.id
+      WHERE a.is_deleted = 0
+        AND (
+          IFNULL(a.selected_text, '') LIKE ? $escape
+          OR IFNULL(a.text, '') LIKE ? $escape
+          OR IFNULL(a.label, '') LIKE ? $escape
+          OR IFNULL(n.text, '') LIKE ? $escape
+        )
+      ORDER BY a.pdf_id COLLATE NOCASE, a.page ASC, a.id
+      ''',
+      [pattern, pattern, pattern, pattern],
+    );
+
+    final byId = <String, AnnotationSearchRow>{};
+    for (final map in maps) {
+      try {
+        final annotation = _fromMap(map);
+        if (byId.containsKey(annotation.id)) continue;
+        final snippet = snippetForAnnotation(
+          annotation,
+          trimmed,
+          noteText: map['note_text'] as String?,
+        );
+        if (snippet.isEmpty) continue;
+        byId[annotation.id] = AnnotationSearchRow(
+          annotation: annotation,
+          snippet: compactSnippet(snippet),
+        );
+      } catch (e, s) {
+        developer.log(
+          'Skipping malformed annotation search row: $map',
+          name: 'sefer.dao',
+          level: 900,
+          error: e,
+          stackTrace: s,
+        );
+      }
+    }
+    return byId.values.toList();
   }
 
   /// Hard-deletes every annotation of [pdfId] and its note entries.

@@ -14,6 +14,8 @@ import 'package:sefer/features/device/presentation/device_tile.dart';
 import 'package:sefer/features/device/state/device_files_providers.dart';
 import 'package:sefer/features/device/state/device_selection_purpose.dart';
 import 'package:sefer/features/home/presentation/home_shell.dart';
+import 'package:sefer/features/home/presentation/page_headers.dart';
+import 'package:sefer/features/library/state/document_collections.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
 import 'package:sefer/shared/state/document_selection_controller.dart';
 import 'package:sefer/shared/widgets/file_actions_sheet.dart';
@@ -62,6 +64,9 @@ class DevicePageState extends ConsumerState<DevicePage> {
   void initState() {
     super.initState();
     _selection.addListener(_onSelectionChanged);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => refresh(cachedOnly: true),
+    );
   }
 
   @override
@@ -84,6 +89,15 @@ class DevicePageState extends ConsumerState<DevicePage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> refresh({bool cachedOnly = false}) async {
+    final notifier = ref.read(deviceFilesProvider.notifier);
+    final addedCount = cachedOnly
+        ? await notifier.refreshCachedIndex()
+        : await notifier.refresh();
+    if (!mounted || addedCount == 0) return;
+    _showMessage('$addedCount new PDF${addedCount == 1 ? '' : 's'} found');
+  }
+
   void clearSelection() {
     _selection.clear();
     setState(() => _purpose = const ManageDeviceFiles());
@@ -97,20 +111,18 @@ class DevicePageState extends ConsumerState<DevicePage> {
   }
 
   Future<void> _addSelected() async {
-    var targetId = _targetCollectionId;
-    targetId ??= await pickOrCreateCollection(context, ref);
-    if (targetId == null || !mounted) return;
-    final destination = targetId.isEmpty ? null : targetId;
+    var collectionId = _targetCollectionId;
+    collectionId ??= await pickOrCreateCollection(context, ref);
+    if (collectionId == null || !mounted) return;
 
     final paths = _selection.selectedPaths;
-    final library = ref.read(libraryEntriesProvider.notifier);
-    for (final path in paths) {
-      await library.addFile(path, collectionId: destination);
-    }
+    await ref
+        .read(libraryEntriesProvider.notifier)
+        .addFilesToCollection(paths, collectionId);
     if (!mounted) return;
 
     _showMessage(
-      '${_fileCount(paths.length)} added to ${_collectionName(destination)}',
+      '${_fileCount(paths.length)} added to ${_collectionName(collectionId)}',
     );
     clearSelection();
     widget.onDone?.call();
@@ -167,17 +179,18 @@ class DevicePageState extends ConsumerState<DevicePage> {
       if (rows != null) _selection.retainExisting(rows.map((e) => e.path));
     });
     final scanState = ref.watch(deviceFilesProvider);
+    final scanStatus = ref.watch(deviceScanStatusProvider);
     final sort = ref.watch(deviceSortProvider);
     final visible = _visibleEntries(scanState.value ?? [], sort);
     final targetId = _targetCollectionId;
 
     return Column(
       children: [
-        GreetingHeader(
+        PageHeader(
           subtitle: targetId != null
               ? 'Adding to "${_collectionName(targetId)}"'
-              : 'All PDFs on device',
-          title: 'Device',
+              : null,
+          title: 'PDFs on device',
           action: _selecting
               ? TextButton(
                   onPressed: clearSelection,
@@ -186,9 +199,9 @@ class DevicePageState extends ConsumerState<DevicePage> {
               : _HeaderActions(
                   sort: sort,
                   onSortSelected: ref.read(deviceSortProvider.notifier).select,
-                  onRescan: scanState.isLoading
+                  onRescan: scanState.isLoading || scanStatus.isRefreshing
                       ? null
-                      : () => ref.read(deviceFilesProvider.notifier).scan(),
+                      : refresh,
                 ),
         ),
         PageSearchBar(
@@ -196,6 +209,7 @@ class DevicePageState extends ConsumerState<DevicePage> {
           onChanged: (v) => setState(() => _query = v),
           hintText: 'Search device…',
         ),
+        if (scanStatus.isRefreshing) const _DeviceRefreshIndicator(),
         if (_selecting)
           DeviceSelectionHeader(
             count: _selection.selectedPaths.length,
@@ -226,6 +240,11 @@ class DevicePageState extends ConsumerState<DevicePage> {
       favoritePaths: ref.watch(favoritePathsProvider),
       onSetFavorite: _setFavorite,
       bottomPadding: widget.bottomPadding,
+      membershipLabel: singleSelectionMembershipLabel(
+        selectedPaths: _selection.selectedPaths,
+        entries: ref.watch(libraryEntriesProvider).value ?? const [],
+        collections: ref.watch(collectionsProvider).value ?? const [],
+      ),
       extraActions: [
         TextButton.icon(
           onPressed: _addSelected,
@@ -248,10 +267,7 @@ class DevicePageState extends ConsumerState<DevicePage> {
       final permDenied = ref
           .watch(deviceFilesProvider.notifier)
           .permissionDenied;
-      return DeviceEmptyState(
-        permissionDenied: permDenied,
-        onScan: () => ref.read(deviceFilesProvider.notifier).scan(),
-      );
+      return DeviceEmptyState(permissionDenied: permDenied, onScan: refresh);
     }
 
     if (entries.isEmpty) {
@@ -310,6 +326,33 @@ class DevicePageState extends ConsumerState<DevicePage> {
       libraryEntryId: libraryEntry?.id,
       canSelect: true,
       onSelect: () => _selection.select(entry.path),
+    );
+  }
+}
+
+class _DeviceRefreshIndicator extends StatelessWidget {
+  const _DeviceRefreshIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      liveRegion: true,
+      label: 'Checking for new PDFs',
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 8),
+            Text('Checking for new PDFs…', style: theme.textTheme.bodySmall),
+          ],
+        ),
+      ),
     );
   }
 }

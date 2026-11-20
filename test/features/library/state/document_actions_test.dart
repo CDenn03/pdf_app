@@ -81,7 +81,7 @@ class _FakePersistence implements LibraryPersistence {
             id: e.id,
             name: e.name,
             path: e.path,
-            collectionId: e.collectionId,
+            collectionIds: e.collectionIds,
             isFavorite: e.isFavorite,
           ),
         )
@@ -140,7 +140,7 @@ const _entry = PersistedEntry(
   id: 'e1',
   name: 'old.pdf',
   path: '/docs/old.pdf',
-  collectionId: 'c1',
+  collectionIds: {'c1'},
   isFavorite: true,
 );
 
@@ -183,7 +183,7 @@ void main() {
       expect(moved.path, '/docs/new.pdf');
       expect(moved.name, 'new.pdf');
       expect(moved.id, 'e1', reason: 'the entry moves, it is not recreated');
-      expect(moved.collectionId, 'c1');
+      expect(moved.collectionIds, {'c1'});
       expect(moved.isFavorite, isTrue);
     });
 
@@ -352,7 +352,7 @@ void main() {
       final restored = container.read(libraryEntriesProvider).value!.single;
       expect(restored.id, 'e1');
       expect(restored.path, '/docs/old.pdf');
-      expect(restored.collectionId, 'c1');
+      expect(restored.collectionIds, {'c1'});
       expect(restored.isFavorite, isTrue);
     });
 

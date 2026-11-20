@@ -35,7 +35,7 @@ class _FakeSettingsStore implements AppSettingsStore {
 }
 
 void main() {
-  testWidgets('Device scan starts once on first visit and stays mounted', (
+  testWidgets('Device scan starts on first visit and refreshes in background', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -55,6 +55,7 @@ void main() {
           ),
           recentsStoreProvider.overrideWithValue(FakeRecentsStore(const [])),
           pdfScannerProvider.overrideWithValue(scanner),
+          devicePdfCacheProvider.overrideWithValue(FakeDevicePdfCache()),
           fileMetadataReaderProvider.overrideWithValue(
             FakeMetadataReader(const {}),
           ),
@@ -75,6 +76,6 @@ void main() {
     await tester.tap(find.text('Device'));
     await tester.pumpAndSettle();
 
-    expect(scanner.scanCount, 1);
+    expect(scanner.scanCount, 2);
   });
 }

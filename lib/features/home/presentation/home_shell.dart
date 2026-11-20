@@ -60,22 +60,32 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         _deviceTargetCollectionId = null;
       });
     } else {
+      final shouldRefresh = _deviceVisited;
       setState(() {
         _selectedIndex = index;
         _deviceVisited = true;
       });
+      if (shouldRefresh) _refreshDeviceAfterBuild();
     }
     _scrollProgress.value = _tabScrollOffsets[index] / 80.0;
   }
 
+  void _refreshDeviceAfterBuild() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _deviceKey.currentState?.refresh();
+    });
+  }
+
   /// Navigate to Device tab with a target collection for bulk-add.
   void navigateToDeviceForCollection(String collectionId) {
+    final shouldRefresh = _deviceVisited;
     _deviceKey.currentState?.clearSelection();
     setState(() {
       _selectedIndex = 1;
       _deviceVisited = true;
       _deviceTargetCollectionId = collectionId;
     });
+    if (shouldRefresh) _refreshDeviceAfterBuild();
   }
 
   @override
@@ -258,53 +268,6 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-// Greeting header — exported for child pages
-class GreetingHeader extends StatelessWidget {
-  const GreetingHeader({
-    super.key,
-    required this.title,
-    this.subtitle,
-    this.action,
-  });
-
-  final String title;
-  final String? subtitle;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xl,
-        AppSpacing.lg,
-        AppSpacing.lg,
-        AppSpacing.sm,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (subtitle != null)
-                  Text(subtitle!, style: theme.textTheme.bodyMedium),
-                Text(
-                  title,
-                  style: theme.textTheme.displayLarge?.copyWith(height: 1.1),
-                ),
-              ],
-            ),
-          ),
-          ?action,
-        ],
-      ),
-    );
-  }
-}
-
 // Section label — exported for child pages
 
 class SectionLabel extends StatelessWidget {
@@ -406,12 +369,4 @@ class _TabItem {
   final String label;
   final IconData icon;
   const _TabItem({required this.label, required this.icon});
-}
-
-/// Returns a time-of-day greeting.
-String get timeGreeting {
-  final hour = DateTime.now().hour;
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
 }

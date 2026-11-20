@@ -72,23 +72,28 @@ void main() {
     expect(container.read(libraryEntriesProvider).value, isEmpty);
   });
 
-  test('moveToCollection updates collectionId', () async {
+  test('addFilesToCollection preserves existing memberships', () async {
     when(() => persistence.loadEntries()).thenAnswer(
       (_) async => [
-        const PersistedEntry(id: 'x3', name: 'c.pdf', path: '/c.pdf'),
+        const PersistedEntry(
+          id: 'x3',
+          name: 'c.pdf',
+          path: '/c.pdf',
+          collectionIds: {'col-1'},
+        ),
       ],
     );
     final container = container0();
     addTearDown(container.dispose);
 
     await container.read(libraryEntriesProvider.future);
-    await container
-        .read(libraryEntriesProvider.notifier)
-        .moveToCollection('x3', 'col-1');
+    await container.read(libraryEntriesProvider.notifier).addFilesToCollection({
+      '/c.pdf',
+    }, 'col-2');
 
-    expect(
-      container.read(libraryEntriesProvider).value!.first.collectionId,
+    expect(container.read(libraryEntriesProvider).value!.first.collectionIds, {
       'col-1',
-    );
+      'col-2',
+    });
   });
 }

@@ -257,4 +257,78 @@ void main() {
       expect(await noteCount('b1'), 1);
     });
   });
+
+  group('search', () {
+    test('matches selected text, labels, and note entries', () async {
+      await dao.upsert(
+        makeHighlight(
+          id: 'h1',
+          pdfId: '/a.pdf',
+        ).copyWith(selectedText: 'The design system tokens'),
+      );
+      await dao.upsert(
+        const Annotation(
+          id: 'b1',
+          pdfId: '/b.pdf',
+          page: 3,
+          type: AnnotationType.bookmark,
+          label: 'Chapter on tokens',
+        ),
+      );
+      await dao.upsert(
+        const Annotation(
+          id: 'n1',
+          pdfId: '/c.pdf',
+          page: 2,
+          type: AnnotationType.note,
+        ),
+      );
+      await db.insert('note_entries', {
+        'id': 'ne1',
+        'annotation_id': 'n1',
+        'text': 'Remember the token scale',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+      await dao.upsert(
+        makeHighlight(
+          id: 'miss',
+          pdfId: '/a.pdf',
+        ).copyWith(selectedText: 'unrelated sentence'),
+      );
+
+      final results = await dao.search('token');
+      final ids = results.map((r) => r.annotation.id).toSet();
+      expect(ids, {'h1', 'b1', 'n1'});
+      expect(
+        results.firstWhere((r) => r.annotation.id == 'n1').snippet,
+        contains('token'),
+      );
+    });
+
+    test('ignores soft-deleted rows and empty queries', () async {
+      await dao.upsert(
+        makeHighlight().copyWith(selectedText: 'keep this highlight'),
+      );
+      await dao.upsert(
+        makeHighlight(id: 'gone').copyWith(selectedText: 'keep this too'),
+      );
+      await dao.softDelete('gone');
+
+      expect(await dao.search('   '), isEmpty);
+      final results = await dao.search('keep');
+      expect(results.map((r) => r.annotation.id), ['test-uuid-1']);
+    });
+
+    test('treats percent signs in the query as literals', () async {
+      await dao.upsert(
+        makeHighlight(id: 'pct').copyWith(selectedText: '100% complete'),
+      );
+      await dao.upsert(
+        makeHighlight(id: 'other').copyWith(selectedText: 'complete'),
+      );
+
+      final results = await dao.search('100%');
+      expect(results.map((r) => r.annotation.id), ['pct']);
+    });
+  });
 }

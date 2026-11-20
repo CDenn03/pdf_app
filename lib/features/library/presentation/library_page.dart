@@ -5,11 +5,15 @@ import 'package:sefer/core/models/collection.dart';
 import 'package:sefer/core/theme/app_colors.dart';
 import 'package:sefer/core/theme/app_spacing.dart';
 import 'package:sefer/features/home/presentation/home_shell.dart';
+import 'package:sefer/features/home/presentation/page_headers.dart';
+import 'package:sefer/features/library/domain/annotation_search.dart';
 import 'package:sefer/features/library/presentation/collection_dialogs.dart';
+import 'package:sefer/features/library/presentation/collection_filter_bar.dart';
 import 'package:sefer/features/library/presentation/library_collection_grid.dart';
 import 'package:sefer/features/library/presentation/library_empty_state.dart';
-import 'package:sefer/features/library/presentation/library_entry_tile.dart';
+import 'package:sefer/features/library/presentation/library_search_results.dart';
 import 'package:sefer/features/library/presentation/library_recents_section.dart';
+import 'package:sefer/features/library/state/annotation_search_provider.dart';
 import 'package:sefer/features/library/state/library_entry.dart';
 import 'package:sefer/features/library/state/library_providers.dart';
 import 'package:sefer/features/recents/state/recents_notifier.dart';
@@ -31,6 +35,7 @@ class LibraryPage extends ConsumerStatefulWidget {
 class _LibraryPageState extends ConsumerState<LibraryPage> {
   final _searchController = TextEditingController();
   String _query = '';
+  LibrarySearchFilter _filter = const SearchAllBooks();
 
   @override
   void dispose() {
@@ -51,9 +56,21 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     final recents = ref.watch(recentsProvider);
     final q = _query.toLowerCase().trim();
     final searching = q.isNotEmpty;
-    final results = searching
-        ? entries.where((e) => e.name.toLowerCase().contains(q)).toList()
+    final scopedEntries = applyLibrarySearchFilter(entries, _filter).toList();
+    final bookResults = searching
+        ? scopedEntries.where((e) => e.name.toLowerCase().contains(q)).toList()
         : const <LibraryEntry>[];
+    final annotationAsync = searching
+        ? ref.watch(annotationSearchProvider(q))
+        : null;
+    final annotationHits = annotationAsync == null
+        ? const <AnnotationSearchHit>[]
+        : resolveAnnotationHits(
+            rows: annotationAsync.value ?? const [],
+            entries: entries,
+            collections: collections,
+            filter: _filter,
+          );
 
     return PopScope(
       canPop: !searching,
@@ -62,18 +79,32 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
       },
       child: CustomScrollView(
         slivers: [
-          SliverToBoxAdapter(
-            child: GreetingHeader(subtitle: timeGreeting, title: 'Library'),
-          ),
+          const SliverToBoxAdapter(child: GreetingHeader()),
           SliverToBoxAdapter(
             child: PageSearchBar(
               controller: _searchController,
               onChanged: (v) => setState(() => _query = v),
-              hintText: 'Search library…',
+              hintText: 'Search books and notes…',
             ),
           ),
           if (searching)
-            ..._searchSlivers(context, q, results)
+            SliverToBoxAdapter(
+              child: CollectionFilterBar(
+                collections: collections,
+                filter: _filter,
+                showFavorites: entries.any((e) => e.isFavorite),
+                onFilterSelected: (next) => setState(() => _filter = next),
+              ),
+            ),
+          if (searching)
+            ...librarySearchSlivers(
+              context: context,
+              query: q,
+              books: bookResults,
+              annotationHits: annotationHits,
+              annotationsLoading: annotationAsync?.isLoading ?? false,
+              annotationsError: annotationAsync?.hasError ?? false,
+            )
           else
             ..._browseSlivers(entries, collections, recents),
           SliverToBoxAdapter(
@@ -82,33 +113,6 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
         ],
       ),
     );
-  }
-
-  List<Widget> _searchSlivers(
-    BuildContext context,
-    String query,
-    List<LibraryEntry> results,
-  ) {
-    if (results.isEmpty) {
-      return [
-        SliverFillRemaining(
-          child: Center(
-            child: Text(
-              'No results for "$query"',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-          ),
-        ),
-      ];
-    }
-    return [
-      SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (_, i) => LibraryEntryTile(entry: results[i]),
-          childCount: results.length,
-        ),
-      ),
-    ];
   }
 
   List<Widget> _browseSlivers(

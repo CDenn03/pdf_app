@@ -10,6 +10,7 @@ class SelectionActionBar extends StatelessWidget {
     required this.onSetFavorite,
     this.extraActions = const [],
     this.bottomPadding = 0,
+    this.membershipLabel,
   });
 
   final Set<String> selectedPaths;
@@ -17,6 +18,9 @@ class SelectionActionBar extends StatelessWidget {
   final ValueChanged<bool> onSetFavorite;
   final List<Widget> extraActions;
   final double bottomPadding;
+
+  /// Shown when a single selected book belongs to one or more collections.
+  final String? membershipLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -36,22 +40,41 @@ class SelectionActionBar extends StatelessWidget {
         color: theme.colorScheme.surface,
         border: Border(top: BorderSide(color: theme.dividerColor)),
       ),
-      child: Wrap(
-        alignment: WrapAlignment.spaceEvenly,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (canMark)
-            TextButton.icon(
-              onPressed: () => onSetFavorite(true),
-              icon: const Icon(Icons.favorite_border),
-              label: const Text('Mark favorite'),
+          if (membershipLabel != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sm,
+                0,
+                AppSpacing.sm,
+                AppSpacing.xs,
+              ),
+              child: Text(
+                membershipLabel!,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall,
+              ),
             ),
-          if (canRemove)
-            TextButton.icon(
-              onPressed: () => onSetFavorite(false),
-              icon: const Icon(Icons.heart_broken_outlined),
-              label: const Text('Remove favorite'),
-            ),
-          ...extraActions,
+          Wrap(
+            alignment: WrapAlignment.spaceEvenly,
+            children: [
+              if (canMark)
+                TextButton.icon(
+                  onPressed: () => onSetFavorite(true),
+                  icon: const Icon(Icons.favorite_border),
+                  label: const Text('Mark favorite'),
+                ),
+              if (canRemove)
+                TextButton.icon(
+                  onPressed: () => onSetFavorite(false),
+                  icon: const Icon(Icons.heart_broken_outlined),
+                  label: const Text('Remove favorite'),
+                ),
+              ...extraActions,
+            ],
+          ),
         ],
       ),
     );

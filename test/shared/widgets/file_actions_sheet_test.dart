@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sefer/core/constants.dart';
+import 'package:sefer/core/models/collection.dart';
 import 'package:sefer/core/models/file_status.dart';
 import 'package:sefer/core/providers.dart';
 import 'package:sefer/core/services/file_service.dart';
+import 'package:sefer/core/services/library_persistence_service.dart';
+import 'package:sefer/features/library/state/library_providers.dart';
 import 'package:sefer/shared/widgets/file_actions_sheet.dart';
+
+import '../../support/library_fakes.dart';
 
 /// Fails every mutation with a fixed reason.
 ///
@@ -40,6 +46,7 @@ Future<void> openSheet(
   FileStatus status = FileStatus.ok,
   Size? surfaceSize,
   FileMutator? mutator,
+  List<Override> extraOverrides = const [],
 }) async {
   if (surfaceSize != null) {
     await tester.binding.setSurfaceSize(surfaceSize);
@@ -49,6 +56,7 @@ Future<void> openSheet(
     ProviderScope(
       overrides: [
         if (mutator != null) fileMutatorProvider.overrideWithValue(mutator),
+        ...extraOverrides,
       ],
       child: MaterialApp(
         home: Scaffold(
@@ -84,6 +92,7 @@ void main() {
 
     expect(find.text('Open'), findsOneWidget);
     expect(find.text('Share'), findsOneWidget);
+    expect(find.text('Add to collection'), findsOneWidget);
     expect(find.text('Rename'), findsOneWidget);
   });
 
@@ -237,9 +246,40 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
+  testWidgets('lists every collection the file belongs to', (tester) async {
+    await openSheet(
+      tester,
+      path: '/docs/a.pdf',
+      extraOverrides: [
+        fileServiceProvider.overrideWithValue(FakeFileChecker()),
+        libraryPersistenceProvider.overrideWithValue(
+          FakeLibraryPersistence(
+            initial: const [
+              PersistedEntry(
+                id: 'id1',
+                name: 'a.pdf',
+                path: '/docs/a.pdf',
+                collectionIds: {'c1', 'c2'},
+              ),
+            ],
+          ),
+        ),
+        collectionsServiceProvider.overrideWithValue(
+          FakeCollectionsService(const [
+            PdfCollection(id: 'c1', name: 'Papers'),
+            PdfCollection(id: 'c2', name: 'Novels'),
+          ]),
+        ),
+      ],
+    );
+
+    expect(find.text('Show in "Papers"'), findsOneWidget);
+    expect(find.text('Show in "Novels"'), findsOneWidget);
+    expect(find.text('Add to collection'), findsOneWidget);
+  });
+
   testWidgets('sheet scrolls when every action is present', (tester) async {
-    // Eight actions overflow a short viewport; without a scroll view this
-    // throws a RenderFlex overflow instead of letting the user reach Delete.
+    // The full action set must remain reachable on a short viewport.
     await openSheet(
       tester,
       canSelect: true,

@@ -67,4 +67,31 @@ void main() {
 
     verify(() => store.save(any())).called(1);
   });
+
+  test('setDisplayName updates state and persists', () async {
+    final container = container0();
+    addTearDown(container.dispose);
+    await container.read(appSettingsProvider.notifier).ready;
+
+    await container.read(appSettingsProvider.notifier).setDisplayName('Ada');
+
+    expect(container.read(appSettingsProvider).displayName, 'Ada');
+    verify(() => store.save(any())).called(1);
+  });
+
+  test('setDisplayName falls back to Reader when blank', () async {
+    when(
+      () => store.load(),
+    ).thenAnswer((_) async => const AppSettings(displayName: 'Ada'));
+    final container = container0();
+    addTearDown(container.dispose);
+    await container.read(appSettingsProvider.notifier).ready;
+
+    await container.read(appSettingsProvider.notifier).setDisplayName('  ');
+
+    expect(
+      container.read(appSettingsProvider).displayName,
+      AppSettings.defaultDisplayName,
+    );
+  });
 }

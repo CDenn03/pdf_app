@@ -6,7 +6,9 @@ import 'package:sefer/core/theme/app_colors.dart';
 import 'package:sefer/core/theme/app_theme.dart';
 import 'package:sefer/core/theme/reading_mode.dart';
 import 'package:sefer/core/theme/reader_layout_mode.dart';
+import 'package:sefer/features/home/presentation/display_name_dialog.dart';
 import 'package:sefer/features/home/presentation/home_shell.dart';
+import 'package:sefer/features/home/presentation/page_headers.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key, this.bottomPadding = 0});
@@ -22,15 +24,26 @@ class SettingsPage extends ConsumerWidget {
 
     return CustomScrollView(
       slivers: [
-        const SliverToBoxAdapter(
-          child: GreetingHeader(subtitle: 'Preferences', title: 'Settings'),
-        ),
+        const SliverToBoxAdapter(child: PageHeader(title: 'Settings')),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const SectionLabel('Your name'),
+                const SizedBox(height: 4),
+                _OptionsCard(
+                  isDark: isDark,
+                  divider: divider,
+                  children: [
+                    _NameRow(
+                      name: settings.displayName,
+                      onTap: () => editDisplayName(context, ref),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
                 const SectionLabel('App theme'),
                 const SizedBox(height: 4),
                 _OptionsCard(
@@ -128,6 +141,45 @@ class _OptionsCard extends StatelessWidget {
         border: Border.all(color: divider),
       ),
       child: Column(children: children),
+    );
+  }
+}
+
+class _NameRow extends StatelessWidget {
+  const _NameRow({required this.name, required this.onTap});
+
+  final String name;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primary = isDark
+        ? AppColors.darkPrimaryText
+        : AppColors.lightPrimaryText;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                name,
+                style: TextStyle(
+                  fontFamily: AppTheme.fontSans,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: primary,
+                ),
+              ),
+            ),
+            Icon(Icons.edit_outlined, size: 20, color: primary),
+          ],
+        ),
+      ),
     );
   }
 }

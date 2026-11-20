@@ -48,7 +48,7 @@ class LibraryNotifier extends AsyncNotifier<List<LibraryEntry>> {
           path: e.path,
           status: status,
           lastOpenedAt: e.lastOpenedAt,
-          collectionId: e.collectionId,
+          collectionIds: e.collectionIds,
           isFavorite: e.isFavorite,
         );
       }),
@@ -71,41 +71,85 @@ class LibraryNotifier extends AsyncNotifier<List<LibraryEntry>> {
     return updated;
   }
 
-  /// Adds a file to the library. No-op if already present.
-  Future<void> addFile(String path, {String? collectionId}) async {
-    final current = state.value ?? [];
-    if (current.any((e) => e.path == path)) {
-      await refreshStatuses();
+  Future<void> addFile(
+    String path, {
+    Set<String> collectionIds = const {},
+  }) async {
+    final loaded = await future;
+    final current = state.value ?? loaded;
+    final existingIndex = current.indexWhere((entry) => entry.path == path);
+    if (existingIndex >= 0) {
+      final existing = current[existingIndex];
+      final mergedIds = {...existing.collectionIds, ...collectionIds};
+      if (mergedIds.length == existing.collectionIds.length) return;
+      final updated = [...current];
+      updated[existingIndex] = existing.copyWith(collectionIds: mergedIds);
+      state = AsyncData(updated);
+      await _persist();
       return;
     }
+
     final status = await _fileChecker.checkFile(path);
-    final updated = [
+    state = AsyncData([
       ...current,
       LibraryEntry(
         id: uuid.v4(),
         name: p.basename(path),
         path: path,
         status: status,
-        collectionId: collectionId,
+        collectionIds: collectionIds,
       ),
-    ];
-    state = AsyncData(updated);
+    ]);
     await _persist();
   }
 
-  /// Removes a file from the library entirely.
   Future<void> removeFile(String id) async {
-    final updated = (state.value ?? []).where((e) => e.id != id).toList();
+    final updated = (state.value ?? [])
+        .where((entry) => entry.id != id)
+        .toList();
     state = AsyncData(updated);
     await _persist();
   }
 
-  /// Moves a file to a different collection (or null = root).
-  Future<void> moveToCollection(String entryId, String? collectionId) async {
-    final updated = (state.value ?? []).map((e) {
-      return e.id == entryId ? e.copyWith(collectionId: collectionId) : e;
+  Future<void> addFilesToCollection(
+    Set<String> paths,
+    String collectionId,
+  ) async {
+    for (final path in paths) {
+      await addFile(path, collectionIds: {collectionId});
+    }
+  }
+
+  Future<void> removeFromCollection(String entryId, String collectionId) async {
+    final loaded = await future;
+    final current = state.value ?? loaded;
+    final updated = current.map((entry) {
+      if (entry.id != entryId || !entry.collectionIds.contains(collectionId)) {
+        return entry;
+      }
+      return entry.copyWith(
+        collectionIds: {...entry.collectionIds}..remove(collectionId),
+      );
     }).toList();
     state = AsyncData(updated);
+    await _persist();
+  }
+
+  Future<void> removeCollectionFromAll(String collectionId) async {
+    final loaded = await future;
+    final current = state.value ?? loaded;
+    if (!current.any((entry) => entry.collectionIds.contains(collectionId))) {
+      return;
+    }
+    state = AsyncData([
+      for (final entry in current)
+        if (entry.collectionIds.contains(collectionId))
+          entry.copyWith(
+            collectionIds: {...entry.collectionIds}..remove(collectionId),
+          )
+        else
+          entry,
+    ]);
     await _persist();
   }
 
@@ -257,6 +301,7 @@ class CollectionsNotifier extends AsyncNotifier<List<PdfCollection>> {
 
   Future<void> deleteCollection(String id) async {
     final updated = (state.value ?? []).where((c) => c.id != id).toList();
+    await ref.read(libraryEntriesProvider.notifier).removeCollectionFromAll(id);
     state = AsyncData(updated);
     await _service.save(updated);
   }

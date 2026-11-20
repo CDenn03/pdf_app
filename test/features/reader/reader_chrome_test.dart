@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sefer/core/models/collection.dart';
 import 'package:sefer/core/providers.dart';
 import 'package:sefer/core/services/library_persistence_service.dart';
 import 'package:sefer/features/library/state/library_entry.dart';
@@ -179,6 +180,7 @@ void main() {
         ReaderMoreMenu(
           onAnnotations: () {},
           onReadingMode: () {},
+          onAddToCollection: () {},
           onShare: () {},
         ),
       ),
@@ -195,6 +197,7 @@ void main() {
         ReaderMoreMenu(
           onAnnotations: () {},
           onReadingMode: () {},
+          onAddToCollection: () {},
           onShare: () {},
           onRename: () => renamed = true,
         ),
@@ -260,13 +263,41 @@ void main() {
         ReaderMoreMenu(
           onAnnotations: () {},
           onReadingMode: () {},
+          onAddToCollection: () {},
           onShare: () {},
         ),
       ),
     );
     expect(find.text('Annotations'), findsOneWidget);
     expect(find.text('Reading mode'), findsOneWidget);
+    expect(find.text('Add to collection'), findsOneWidget);
     expect(find.text('Share'), findsOneWidget);
+  });
+
+  testWidgets('ReaderMoreMenu lists collections the book belongs to', (
+    tester,
+  ) async {
+    var opened = '';
+    await tester.pumpWidget(
+      _host(
+        ReaderMoreMenu(
+          onAnnotations: () {},
+          onReadingMode: () {},
+          onAddToCollection: () {},
+          onShare: () {},
+          collections: const [
+            PdfCollection(id: 'c1', name: 'Papers'),
+            PdfCollection(id: 'c2', name: 'Novels'),
+          ],
+          onOpenCollection: (collection) => opened = collection.id,
+        ),
+      ),
+    );
+
+    expect(find.text('Show in "Papers"'), findsOneWidget);
+    expect(find.text('Show in "Novels"'), findsOneWidget);
+    await tester.tap(find.text('Show in "Papers"'));
+    expect(opened, 'c1');
   });
 
   group('JumpToPageDialog', () {

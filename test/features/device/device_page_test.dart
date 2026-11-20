@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:sefer/core/models/collection.dart';
 import 'package:sefer/core/providers.dart';
+import 'package:sefer/core/services/library_persistence_service.dart';
 import 'package:sefer/core/theme/app_theme.dart';
 import 'package:sefer/features/device/data/file_metadata_reader.dart';
 import 'package:sefer/features/device/presentation/device_page.dart';
@@ -17,6 +19,7 @@ Future<ProviderContainer> _pump(
   WidgetTester tester, {
   FakeLibraryPersistence? persistence,
   String? targetCollectionId,
+  List<PdfCollection> collections = const [],
 }) async {
   tester.view.physicalSize = const Size(800, 1600);
   tester.view.devicePixelRatio = 1.0;
@@ -26,6 +29,7 @@ Future<ProviderContainer> _pump(
     overrides: [
       fileServiceProvider.overrideWithValue(FakeFileChecker()),
       pdfScannerProvider.overrideWithValue(FakePdfScanner(_paths)),
+      devicePdfCacheProvider.overrideWithValue(FakeDevicePdfCache()),
       fileMetadataReaderProvider.overrideWithValue(
         FakeMetadataReader({
           for (final path in _paths)
@@ -35,7 +39,9 @@ Future<ProviderContainer> _pump(
       libraryPersistenceProvider.overrideWithValue(
         persistence ?? FakeLibraryPersistence(),
       ),
-      collectionsServiceProvider.overrideWithValue(FakeCollectionsService()),
+      collectionsServiceProvider.overrideWithValue(
+        FakeCollectionsService(collections),
+      ),
     ],
   );
   addTearDown(container.dispose);
@@ -55,6 +61,12 @@ Future<ProviderContainer> _pump(
 }
 
 void main() {
+  testWidgets('title is PDFs on device', (tester) async {
+    await _pump(tester);
+    expect(find.text('PDFs on device'), findsOneWidget);
+    expect(find.text('Device'), findsNothing);
+  });
+
   testWidgets('long press selects without opening the action sheet', (
     tester,
   ) async {
@@ -152,6 +164,63 @@ void main() {
     final gamma = tester.getTopLeft(find.text('gamma.pdf')).dy;
     final alpha = tester.getTopLeft(find.text('alpha.pdf')).dy;
     expect(gamma, lessThan(alpha));
+  });
+
+  testWidgets('selecting one book shows the collections it belongs to', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      persistence: FakeLibraryPersistence(
+        initial: const [
+          PersistedEntry(
+            id: 'b',
+            name: 'beta.pdf',
+            path: '/d/beta.pdf',
+            collectionIds: {'c1', 'c2'},
+          ),
+        ],
+      ),
+      collections: const [
+        PdfCollection(id: 'c1', name: 'Papers'),
+        PdfCollection(id: 'c2', name: 'Novels'),
+      ],
+    );
+
+    await tester.longPress(find.text('beta.pdf'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('In Papers · Novels'), findsOneWidget);
+    expect(find.text('Add to collection'), findsOneWidget);
+  });
+
+  testWidgets('overflow lists collections without opening the book', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      persistence: FakeLibraryPersistence(
+        initial: const [
+          PersistedEntry(
+            id: 'b',
+            name: 'beta.pdf',
+            path: '/d/beta.pdf',
+            collectionIds: {'c1', 'c2'},
+          ),
+        ],
+      ),
+      collections: const [
+        PdfCollection(id: 'c1', name: 'Papers'),
+        PdfCollection(id: 'c2', name: 'Novels'),
+      ],
+    );
+
+    await tester.tap(find.byTooltip('File actions for beta.pdf'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Show in "Papers"'), findsOneWidget);
+    expect(find.text('Show in "Novels"'), findsOneWidget);
+    expect(find.text('Add to collection'), findsOneWidget);
   });
 
   testWidgets('add-to-collection mode shows the add bar, not favorites', (
